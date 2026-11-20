@@ -1,7 +1,7 @@
 # AGENTS.md — Harness cho AI khi làm việc trên repo này
 
 Hợp đồng giữa người và AI agent khi phát triển **Đảo Đèn Lồng**.
-Mục tiêu tối thượng: **đúng Test Contract (hiện tại v1.2) và tất định**. Đẹp/phức tạp đứng sau.
+Mục tiêu tối thượng: **đúng Test Contract (hiện tại v1.3) và tất định**. Đẹp/phức tạp đứng sau.
 
 ## Quy tắc bất biến
 
@@ -69,6 +69,19 @@ Mục tiêu tối thượng: **đúng Test Contract (hiện tại v1.2) và tấ
   (lỗi thật: thanh dầu bị quay lưng, biến mất ở khung đầu).
 - Trang ẩn ⇒ `requestAnimationFrame` dừng. Để kiểm HUD khi không ai nhìn, dùng `window.__ddl.debugAdvance(n)`
   (chạy đúng các hàm thật), và ghi rõ trong evidence ảnh nào có dựng cảnh bằng hook debug.
+- **Evidence làm tay không bao giờ nằm trong vùng script được xoá.** `gen-evidence.js` chỉ thay `cases/`, `*.jsonl`,
+  `SUMMARY.md`. (Lỗi thật: bản cũ xoá cả thư mục ⇒ mất ảnh Phase 2 trước commit.) Trước khi tag, kiểm
+  `git ls-tree -r --name-only HEAD -- evidence/<phase>` có đủ ảnh/ghi chú.
+- **Bench mở cửa sổ Chrome thật trên máy người dùng** — báo trước và hỏi trước khi chạy; cửa sổ bị đóng tay sẽ
+  cho lỗi "Target closed / detached Frame / context destroyed" (log `page.on("close")` để phân biệt với crash).
+- **Đo hiệu năng không được làm méo số đo**: bộ đo RAM phải là một tiến trình sống lâu, ưu tiên thấp (spawn
+  PowerShell mỗi giây làm `p1_low` rơi từ 86 xuống 38).
+- **RSS ≠ rò rỉ.** Trước khi kết luận rò rỉ, theo dõi `heapUsed` qua nhiều vòng. RSS Node nhảy một lần do
+  TurboFan; soak chạy `--no-opt` (lý do + số đo ghi ở README và `soak.json`).
+- CSS: đặt `font-size` trên `html` thì **không** được viết `font-size: 1rem` cho `html` ở rule khác (1rem trên
+  root = 16 px mặc định). Kiểm cỡ chữ bằng `getComputedStyle`, đừng tin mắt.
+- **Yêu cầu có hai cách hiểu thì hỏi lại một câu** trước khi làm (lỗi thật: "xoay chuột như góc nhìn thứ nhất"
+  bị làm thành hai chế độ camera + phím V; người dùng chỉ cần một camera xoay theo chuột).
 
 ## Bản đồ mã nguồn
 
@@ -85,6 +98,12 @@ Mục tiêu tối thượng: **đúng Test Contract (hiện tại v1.2) và tấ
 | `web/audio.js` | Âm thanh tổng hợp WebAudio (bảng sự kiện→âm ở đầu file) |
 | `web/palette.js` | Bảng màu chuẩn TICKET-02 + công thức ánh sáng môi trường |
 | `tests/headless-cases.json` | Scenario headless theo tính năng (≥ 1/tính năng) |
+| `src/bench/` | Cảnh benchmark chuẩn (`buildBenchScenario`, `benchCamera`) + công thức thống kê FPS (hàm thuần, có test) |
+| `src/leaderboard.js` | Luật bảng xếp hạng (tên, sắp xếp, top 10) — dùng chung server / trình duyệt / test |
+| `server.js` | Static server + API `/api/leaderboard` (lưu `data/`) + `--export-leaderboard`; `run_cmd` |
+| `scripts/bench.js`, `scripts/soak.js` | `bench_cmd` (Puppeteer, cửa sổ thật) và `soak_cmd` |
+| `scripts/build-web.js` | Đóng gói web tĩnh + zip cho GitHub Release |
+| `web/a11y.js`, `web/board.js` | Đổi phím / phụ đề / chớp màn hình; client bảng xếp hạng |
 | `docs/adr/` | Quyết định thiết kế (ADR) cho các thay đổi luật lõi |
 | `CHANGELOG.md` | Breaking changes theo phase + bảng test cập nhật/xoá |
 

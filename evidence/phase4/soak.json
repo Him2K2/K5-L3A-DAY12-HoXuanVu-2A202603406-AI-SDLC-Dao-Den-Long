@@ -1,0 +1,119 @@
+{
+  "nights": 10,
+  "crashes": 0,
+  "results": [
+    "lost",
+    "lost",
+    "lost",
+    "lost",
+    "lost",
+    "lost",
+    "lost",
+    "lost",
+    "lost",
+    "lost"
+  ],
+  "mem_start_mb": 34.2,
+  "mem_end_mb": 37.3,
+  "duration_s": 0.3,
+  "mem_ratio": 1.091,
+  "pass": true,
+  "heap_used_start_mb": 3.44,
+  "heap_used_end_mb": 3.86,
+  "seed": 7,
+  "node": "v22.5.1",
+  "gc_exposed": true,
+  "v8_flags": "--expose-gc --no-opt",
+  "details": [
+    {
+      "night": 1,
+      "seed": 7,
+      "result": "lost",
+      "reason": "no_flames",
+      "score": 0,
+      "ticks": 2689,
+      "lit_at_end": 0
+    },
+    {
+      "night": 2,
+      "seed": 8,
+      "result": "lost",
+      "reason": "no_flames",
+      "score": 0,
+      "ticks": 2234,
+      "lit_at_end": 0
+    },
+    {
+      "night": 3,
+      "seed": 9,
+      "result": "lost",
+      "reason": "no_flames",
+      "score": 0,
+      "ticks": 3434,
+      "lit_at_end": 0
+    },
+    {
+      "night": 1,
+      "seed": 10,
+      "result": "lost",
+      "reason": "no_flames",
+      "score": 10,
+      "ticks": 3363,
+      "lit_at_end": 0
+    },
+    {
+      "night": 2,
+      "seed": 11,
+      "result": "lost",
+      "reason": "no_flames",
+      "score": 5,
+      "ticks": 2724,
+      "lit_at_end": 0
+    },
+    {
+      "night": 3,
+      "seed": 12,
+      "result": "lost",
+      "reason": "no_flames",
+      "score": 0,
+      "ticks": 2193,
+      "lit_at_end": 0
+    },
+    {
+      "night": 1,
+      "seed": 13,
+      "result": "lost",
+      "reason": "no_flames",
+      "score": 5,
+      "ticks": 2526,
+      "lit_at_end": 0
+    },
+    {
+      "night": 2,
+      "seed": 14,
+      "result": "lost",
+      "reason": "no_flames",
+      "score": 0,
+      "ticks": 1809,
+      "lit_at_end": 0
+    },
+    {
+      "night": 3,
+      "seed": 15,
+      "result": "lost",
+      "reason": "no_flames",
+      "score": 0,
+      "ticks": 1778,
+      "lit_at_end": 0
+    },
+    {
+      "night": 1,
+      "seed": 16,
+      "result": "lost",
+      "reason": "no_flames",
+      "score": 0,
+      "ticks": 2941,
+      "lit_at_end": 0
+    }
+  ]
+}

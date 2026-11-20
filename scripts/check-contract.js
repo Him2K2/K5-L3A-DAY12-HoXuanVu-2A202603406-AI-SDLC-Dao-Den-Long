@@ -22,4 +22,13 @@ if (!eq(contract.tuning, DEFAULT_TUNING)) {
   console.error("code    :", JSON.stringify(DEFAULT_TUNING));
   process.exit(1);
 }
-console.log("OK: game.contract.json tuning matches code DEFAULT_TUNING.");
+// v1.3: required commands present and pointing at files that exist.
+const need = ["contract_version", "team", "build_cmd", "run_cmd", "headless_cmd", "bench_cmd", "soak_cmd"];
+const missing = need.filter((k) => typeof contract[k] !== "string" || !contract[k]);
+if (missing.length) { console.error("MISSING contract keys:", missing.join(", ")); process.exit(1); }
+if (contract.contract_version !== "1.3") { console.error(`contract_version is ${contract.contract_version}, expected 1.3`); process.exit(1); }
+for (const k of ["run_cmd", "headless_cmd", "bench_cmd", "soak_cmd"]) {
+  const script = contract[k].split(/\s+/).find((w) => w.endsWith(".js"));
+  if (!script || !fs.existsSync(path.join(root, script))) { console.error(`${k}: script not found (${contract[k]})`); process.exit(1); }
+}
+console.log("OK: game.contract.json v1.3 — tuning matches code DEFAULT_TUNING; run/headless/bench/soak commands resolve.");

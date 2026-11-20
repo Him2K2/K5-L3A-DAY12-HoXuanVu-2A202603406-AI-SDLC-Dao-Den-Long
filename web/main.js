@@ -6,6 +6,14 @@ import { getMap } from "../src/core/maps.js";
 import { World } from "./world.js";
 import { Audio } from "./audio.js";
 import { PAL } from "./palette.js";
+import { DEFAULT_KEYS, buildKeyList, makeCaptions, makeFlash } from "./a11y.js";
+import { loadBoard, saveScore, renderBoard } from "./board.js";
+import { validateName, isoWithOffset } from "../src/leaderboard.js";
+import { buildBenchScenario, benchCamera, BENCH } from "../src/bench/scene.js";
+import { benchStats } from "../src/bench/stats.js";
+
+const PARAMS = new URLSearchParams(location.search);
+const IS_BENCH = PARAMS.get("bench") === "1";
 
 // ---------------------------------------------------------------- renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -26,9 +34,17 @@ addEventListener("resize", () => {
 
 // ---------------------------------------------------------------- settings (persisted)
 const SETTINGS_KEY = "ddl.settings.v1";
-const settings = { volume: 0.7, sens: 1.0, colorBlind: false, camMode: "fp" }; // camMode: "fp" | "tp"
-try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch { /* private mode */ }
-const saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* ignore */ } };
+const prefersReduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const settings = {
+  volume: 0.7, sens: 1.0, colorBlind: false,
+  reducedMotion: prefersReduced, largeText: false, keys: { ...DEFAULT_KEYS },
+};
+try {
+  const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+  Object.assign(settings, saved, { keys: { ...DEFAULT_KEYS, ...(saved.keys || {}) } });
+} catch { /* private mode */ }
+const saveSettings = () => { if (IS_BENCH) return; try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* ignore */ } };
+if (IS_BENCH) settings.reducedMotion = true; // standard scene: no shake/flash extras
 
 const audio = new Audio();
 audio.setVolume(settings.volume);
@@ -50,11 +66,25 @@ const app = {
   camPitch: 0, // degrees, view only (the sim only receives camYaw)
   lastSecond: null,
   warned: false,
+  seed: 0, // campaign seed; night n uses seed + n - 1 (stored on the leaderboard)
+  shakeT: 0, // camera shake time left (s), never used when reduced motion is on
+  spawnMarks: [], // { id, until } — shades that just appeared, pointed at from the screen edge
+  weakSeen: new Set(), // lanterns already announced as low on fuel
+  lastSubmitted: null,
 };
 window.__ddl = app; // inspection hook for debugging/evidence (read-only use)
 
 const $ = (id) => document.getElementById(id);
-const screens = ["menu", "intro", "pause", "settings", "result", "dawn"];
+const screens = ["menu", "intro", "pause", "settings", "result", "dawn", "board"];
+const caption = makeCaptions(document.getElementById("captions"));
+const flash = makeFlash(document.getElementById("flash"), () => settings.reducedMotion);
+
+// Accessibility display options (TICKET-04 §4): text size ×1.25 and reduced motion (no shake/flash/blink).
+function applyDisplay() {
+  document.documentElement.classList.toggle("large", !!settings.largeText);
+  document.body.classList.toggle("rm", !!settings.reducedMotion);
+}
+applyDisplay();
 function show(screen) {
   app.screen = screen;
   for (const s of screens) $(`scr-${s}`).classList.toggle("hidden", s !== screen);
@@ -73,7 +103,10 @@ applyColorBlind();
 function loadNight(n) {
   if (app.world) app.world.dispose();
   app.night = n;
-  app.game = new Game({ seed: (Math.random() * 2 ** 31) | 0, night: n });
+  app.game = new Game({ seed: (app.seed + n - 1) >>> 0, night: n });
+  app.spawnMarks = [];
+  app.weakSeen = new Set();
+  app.shakeT = 0;
   app.world = new World(scene, app.game);
   app.world.setColorBlind(!!settings.colorBlind);
   app.camYaw = 0;
@@ -93,18 +126,13 @@ const keys = {};
 const prev = { jump: false, interact: false, pulse: false, dash: false };
 const resetEdges = () => { for (const k in keys) keys[k] = false; for (const k in prev) prev[k] = false; };
 addEventListener("keydown", (e) => {
+  if (e.target && e.target.tagName === "INPUT" && e.target.type === "text") return; // typing a name
   if (["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
-  if ((e.code === "Escape" || e.code === "KeyP") && !e.repeat) {
+  if ((e.code === "Escape" || e.code === settings.keys.pause) && !e.repeat) {
     if (app.screen === "play") return pause();
     if (app.screen === "pause") return resume();
   }
   if (e.code === "Enter" && app.screen === "intro") return beginPlay();
-  if (e.code === "KeyV" && !e.repeat && app.screen === "play") {
-    settings.camMode = settings.camMode === "fp" ? "tp" : "fp";
-    saveSettings();
-    applyCamMode();
-    return;
-  }
   keys[e.code] = true;
 });
 addEventListener("keyup", (e) => { keys[e.code] = false; });
@@ -118,14 +146,18 @@ const lockPointer = () => {
     try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch { /* not allowed here */ }
   }
 };
-const PITCH = { fp: [-80, 80], tp: [-60, 25] };
+// Embedded/iframed views refuse pointer lock with a rejected promise; the game falls back to plain
+// mouse movement there, so swallow exactly that rejection instead of reporting an uncaught error.
+addEventListener("unhandledrejection", (e) => {
+  if (/pointer lock/i.test(String(e.reason && e.reason.message))) e.preventDefault();
+});
+const PITCH_MAX = 80; // look up/down limit, degrees
 canvas.addEventListener("mousedown", () => { if (app.screen === "play") lockPointer(); });
 addEventListener("mousemove", (e) => {
   if (app.screen !== "play") return;
-  const k = 0.15 * settings.sens; // degrees per pixel
+  const k = 0.15 * settings.sens; // degrees per pixel, like a shooter
   app.camYaw -= e.movementX * k;
-  const [lo, hi] = PITCH[settings.camMode];
-  app.camPitch = Math.max(lo, Math.min(hi, app.camPitch - e.movementY * k));
+  app.camPitch = Math.max(-PITCH_MAX, Math.min(PITCH_MAX, app.camPitch - e.movementY * k));
 });
 document.addEventListener("pointerlockchange", () => {
   // Browsers exit pointer lock on Esc without delivering the key: treat it as "pause".
@@ -135,17 +167,18 @@ document.addEventListener("pointerlockchange", () => {
 function gatherInput() {
   if (keys.ArrowLeft) app.camYaw += 2.0 * settings.sens;
   if (keys.ArrowRight) app.camYaw -= 2.0 * settings.sens;
+  const K = settings.keys; // rebindable (TICKET-04 §4)
   let x = 0, z = 0;
-  if (keys.KeyW || keys.ArrowUp) z += 1;
-  if (keys.KeyS || keys.ArrowDown) z -= 1;
+  if (keys[K.forward]) z += 1;
+  if (keys[K.back]) z -= 1;
   // Contract: move x=+1 at yaw 0 is world +X = screen-LEFT for a camera looking down +Z.
-  if (keys.KeyD) x -= 1;
-  if (keys.KeyA) x += 1;
+  if (keys[K.right]) x -= 1;
+  if (keys[K.left]) x += 1;
   const held = {
-    jump: !!keys.Space,
-    interact: !!keys.KeyE,
-    pulse: !!(keys.KeyQ || keys.KeyF),
-    dash: !!(keys.ShiftLeft || keys.ShiftRight),
+    jump: !!keys[K.jump],
+    interact: !!keys[K.interact],
+    pulse: !!keys[K.pulse],
+    dash: !!keys[K.dash],
   };
   const inp = { move: [x, z], camYaw: app.camYaw, pause: false };
   for (const k in held) { inp[k] = held[k] && !prev[k]; prev[k] = held[k]; }
@@ -167,8 +200,41 @@ function openSettings(back) {
   $("set-volume").value = Math.round(settings.volume * 100);
   $("set-sens").value = settings.sens;
   $("set-cb").checked = !!settings.colorBlind;
+  $("set-rm").checked = !!settings.reducedMotion;
+  $("set-large").checked = !!settings.largeText;
+  keyList.cancel();
+  $("key-msg").textContent = "";
   updateSettingLabels();
   show("settings");
+}
+const keyList = buildKeyList($("keylist"), settings, {
+  onChange: saveSettings,
+  notify: (msg) => { $("key-msg").textContent = msg; },
+});
+
+// ---- leaderboard (TICKET-04 §3) ----
+function offerNameEntry(where) {
+  const box = $(`${where}-entry`);
+  box.classList.remove("hidden");
+  $(`${where}-name`).value = "";
+  $(`${where}-msg`).textContent = `Lưu điểm ${total()} (${Object.keys(app.won).length}/3 Đêm thắng) vào bảng xếp hạng:`;
+}
+async function submitName(where) {
+  const v = validateName($(`${where}-name`).value);
+  if (!v.ok) { $(`${where}-msg`).textContent = v.error; return; }
+  const entry = { name: v.name, score: total(), nights_won: Object.keys(app.won).length, achieved_at: isoWithOffset(), seed: app.seed };
+  const res = await saveScore(entry);
+  if (!res.ok) { $(`${where}-msg`).textContent = res.error; return; }
+  $(`${where}-entry`).classList.add("hidden");
+  app.lastSubmitted = res.rank;
+  openBoard(res.rank ? `Bạn đứng hạng #${res.rank}!` : "Điểm chưa đủ vào top 10 — thử lại nhé!");
+}
+async function openBoard(note = "") {
+  const { entries, where } = await loadBoard();
+  renderBoard($("board-table"), entries, app.lastSubmitted);
+  $("board-note").textContent = note;
+  $("board-where").textContent = where === "disk" ? "Lưu trên đĩa (data/leaderboard.json)." : "Bản web tĩnh: lưu trong trình duyệt này.";
+  show("board");
 }
 function updateSettingLabels() {
   $("lbl-volume").textContent = `${Math.round(settings.volume * 100)}%`;
@@ -184,8 +250,10 @@ function onGameOver(result) {
     if (app.night === 3) {
       $("dawn-score").textContent = total();
       $("dawn-breakdown").textContent = [1, 2, 3].filter((k) => k in app.won).map((k) => `Đêm ${k}: ${app.won[k]}`).join(" · ");
+      offerNameEntry("dawn");
       return show("dawn");
     }
+    $("result-entry").classList.add("hidden");
     $("result-title").textContent = `Đêm ${app.night} — Bình minh đã tới!`;
     $("result-sub").textContent = `Giữ được ${lit}/${n} đèn sáng · Điểm Đêm này: ${g.score} · Tổng: ${total()}`;
     $("btn-next").classList.remove("hidden");
@@ -199,6 +267,7 @@ function onGameOver(result) {
     $("result-sub").textContent = `${why} Tổng điểm hiện tại: ${total()}`;
     $("btn-next").classList.add("hidden");
     $("btn-retry").classList.remove("hidden");
+    offerNameEntry("result"); // after losing any night
   }
   show("result");
 }
@@ -217,14 +286,26 @@ function simStep() {
   if (input.jump && wasGrounded && !g.player.grounded) audio.play("jump");
   for (const e of events) {
     if (SOUND_FOR[e.name]) audio.play(SOUND_FOR[e.name]);
+    // Visual cues for sound events (TICKET-04 §4).
+    if (e.name === "shade_spawned") { caption("👁 Bóng Mực xuất hiện", "danger"); app.spawnMarks.push({ id: e.data.id, until: performance.now() + 4000 }); }
+    if (e.name === "player_hit") { app.shakeT = settings.reducedMotion ? 0 : 0.3; flash("hit"); }
+    if (e.name === "lantern_lit") flash("lit");
+    if (e.name === "lantern_out") caption(`💨 Đèn ${e.data.lantern_id} đã tắt`, "danger");
     if (e.name === "game_over") onGameOver(e.data.result);
   }
-  // Countdown: one tick per second for the last 10 s.
+  // Countdown: one tick per second for the last 10 s (+ caption at 10 s).
   const s = Math.ceil(g.timeLeft);
   if (s <= 10 && s > 0 && s !== app.lastSecond) audio.play("tick");
+  if (s === 10 && app.lastSecond !== 10) caption("⏳ 10 giây cuối!", "danger");
   app.lastSecond = s;
-  if (g.windWarning && !app.warned) audio.play("wind");
+  if (g.windWarning && !app.warned) { audio.play("wind"); caption("🍃 Gió sắp thổi!"); }
   app.warned = g.windWarning;
+  // Low fuel: announce each lantern once per drop below 30.
+  for (const l of g.lanterns) {
+    const weak = l.lit && l.fuelU < 30 * 60;
+    if (weak && !app.weakSeen.has(l.id)) { app.weakSeen.add(l.id); caption(`🏮 Đèn ${l.id} sắp cạn dầu`, "danger"); }
+    if (!weak) app.weakSeen.delete(l.id);
+  }
 }
 
 // ---------------------------------------------------------------- HUD
@@ -305,21 +386,39 @@ function updateHUD() {
   if (!best) pickNearest((l) => l.lit && g.fuelOut(l) < 30);
 
   const arrow = $("arrow");
-  if (best) {
-    v3.set(best.x, best.y + 3.3, best.z).project(camera);
-    const behind = v3.z > 1;
-    let nx = behind ? -v3.x : v3.x, ny = behind ? -v3.y : v3.y;
-    const onScreen = !behind && Math.abs(nx) < 0.92 && Math.abs(ny) < 0.92;
-    arrow.classList.toggle("hidden", onScreen);
-    if (!onScreen) {
-      const ang = Math.atan2(ny, nx);
-      const m = Math.max(Math.abs(Math.cos(ang)), Math.abs(Math.sin(ang)));
-      const ex = (Math.cos(ang) / m) * 0.88, ey = (Math.sin(ang) / m) * 0.82;
-      arrow.style.left = `${(ex * 0.5 + 0.5) * innerWidth}px`;
-      arrow.style.top = `${(-ey * 0.5 + 0.5) * innerHeight}px`;
-      arrow.style.transform = `translate(-50%,-50%) rotate(${-ang}rad)`;
-    }
-  } else arrow.classList.add("hidden");
+  if (best) edgeArrow(arrow, best.x, best.y + 3.3, best.z);
+  else arrow.classList.add("hidden");
+
+  // Edge arrows toward shades that just appeared (visual cue for the spawn sound).
+  const nowMs = performance.now();
+  app.spawnMarks = app.spawnMarks.filter((m) => m.until > nowMs);
+  const box = $("spawn-arrows");
+  const live = new Set();
+  for (const m of app.spawnMarks) {
+    const sh = g.shades.find((s) => s.id === m.id);
+    if (!sh) continue;
+    live.add(m.id);
+    let el = box.querySelector(`[data-id="${m.id}"]`);
+    if (!el) { el = document.createElement("div"); el.className = "spawn-arrow"; el.dataset.id = m.id; el.textContent = "➤"; box.appendChild(el); }
+    edgeArrow(el, sh.x, sh.y, sh.z);
+  }
+  for (const el of [...box.children]) if (!live.has(el.dataset.id)) el.remove();
+}
+
+// Place `el` at the screen edge pointing at a world position; hide it when the point is on screen.
+function edgeArrow(el, x, y, z) {
+  v3.set(x, y, z).project(camera);
+  const behind = v3.z > 1;
+  const nx = behind ? -v3.x : v3.x, ny = behind ? -v3.y : v3.y;
+  const onScreen = !behind && Math.abs(nx) < 0.92 && Math.abs(ny) < 0.92;
+  el.classList.toggle("hidden", onScreen);
+  if (onScreen) return;
+  const ang = Math.atan2(ny, nx);
+  const m = Math.max(Math.abs(Math.cos(ang)), Math.abs(Math.sin(ang)));
+  const ex = (Math.cos(ang) / m) * 0.88, ey = (Math.sin(ang) / m) * 0.82;
+  el.style.left = `${(ex * 0.5 + 0.5) * innerWidth}px`;
+  el.style.top = `${(-ey * 0.5 + 0.5) * innerHeight}px`;
+  el.style.transform = `translate(-50%,-50%) rotate(${-ang}rad)`;
 }
 
 // ---------------------------------------------------------------- camera + loop
@@ -331,14 +430,15 @@ function lookDir() {
 const EYE_H = 1.45; // Mây's eyes, just under the nón lá
 function updateCamera() {
   const p = app.game.player;
+  // One camera: Mây's eyes, turned by the mouse (yaw + pitch) like a shooter.
   const [dx, dy, dz] = lookDir();
-  if (settings.camMode === "fp") {
-    camera.position.set(p.x, p.y + EYE_H, p.z);
-    camera.lookAt(p.x + dx, p.y + EYE_H + dy, p.z + dz);
-  } else {
-    const dist = 11, ty = Math.max(p.y, -2) + 1.4;
-    camera.position.set(p.x - dx * dist, ty - dy * dist, p.z - dz * dist);
-    camera.lookAt(p.x, ty, p.z);
+  camera.position.set(p.x, p.y + EYE_H, p.z);
+  camera.lookAt(p.x + dx, p.y + EYE_H + dy, p.z + dz);
+  // Camera shake on hit — disabled by "Giảm chuyển động" (shakeT stays 0).
+  if (app.shakeT > 0 && !settings.reducedMotion) {
+    const a = 0.12 * (app.shakeT / 0.3);
+    camera.position.x += (Math.random() - 0.5) * a;
+    camera.position.y += (Math.random() - 0.5) * a;
   }
 }
 
@@ -358,12 +458,9 @@ const hand = new THREE.Group();
   scene.add(camera); // children of the camera only render if the camera is in the scene
 }
 function applyCamMode() {
-  const fp = settings.camMode === "fp";
-  app.camPitch = fp ? 0 : -22;
-  if (app.world) app.world.setFirstPerson(fp);
-  hand.visible = fp;
-  $("crosshair").classList.toggle("hidden", !fp);
-  $("cam-mode").textContent = fp ? "Góc nhìn thứ nhất · V" : "Góc nhìn thứ ba · V";
+  app.camPitch = 0;
+  if (app.world) app.world.setFirstPerson(true);
+  $("crosshair").classList.remove("hidden");
 }
 
 let acc = 0, last = performance.now(), fpsFrames = 0, fpsT = 0;
@@ -371,6 +468,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  app.shakeT = Math.max(0, app.shakeT - dt);
   if (app.game) {
     if (app.screen === "play") {
       acc += dt;
@@ -384,7 +482,7 @@ function frame(now) {
     camera.position.set(Math.sin(now / 8000) * 30, 18, Math.cos(now / 8000) * 30);
     camera.lookAt(0, 0, 0);
   }
-  hand.visible = settings.camMode === "fp" && !!app.game && !app.game.player.fallen;
+  hand.visible = !!app.game && !app.game.player.fallen;
   renderer.render(scene, camera);
   fpsFrames++; fpsT += dt;
   if (fpsT >= 0.5) { $("fps").textContent = `${Math.round(fpsFrames / fpsT)} FPS`; fpsFrames = 0; fpsT = 0; }
@@ -392,8 +490,19 @@ function frame(now) {
 
 // ---------------------------------------------------------------- buttons
 const on = (id, fn) => $(id).addEventListener("click", () => { audio.unlock(); audio.play("click"); fn(); });
-on("btn-start", () => { app.won = {}; loadNight(1); });
-for (const n of [1, 2, 3]) on(`btn-night${n}`, () => { app.won = {}; loadNight(n); });
+const newCampaign = () => { app.won = {}; app.lastSubmitted = null; app.seed = (Math.random() * 2 ** 31) >>> 0; };
+on("btn-start", () => { newCampaign(); loadNight(1); });
+for (const n of [1, 2, 3]) on(`btn-night${n}`, () => { newCampaign(); loadNight(n); });
+on("btn-board", () => openBoard());
+on("btn-board-back", () => show("menu"));
+on("btn-result-save", () => submitName("result"));
+on("btn-dawn-save", () => submitName("dawn"));
+for (const w of ["result", "dawn"]) {
+  $(`${w}-name`).addEventListener("keydown", (e) => { if (e.key === "Enter") submitName(w); });
+}
+on("btn-keys-reset", () => { settings.keys = { ...DEFAULT_KEYS }; saveSettings(); keyList.render(); $("key-msg").textContent = "Đã khôi phục phím mặc định."; });
+$("set-rm").addEventListener("change", (e) => { settings.reducedMotion = e.target.checked; applyDisplay(); saveSettings(); });
+$("set-large").addEventListener("change", (e) => { settings.largeText = e.target.checked; applyDisplay(); saveSettings(); });
 on("btn-menu-settings", () => openSettings("menu"));
 on("btn-begin", beginPlay);
 on("btn-resume", resume);
@@ -420,5 +529,57 @@ app.debugAdvance = (ticks = 1) => {
   return { tick: app.game.tick, state: app.game.state, screen: app.screen };
 };
 
-show("menu");
-requestAnimationFrame(frame);
+// ---------------------------------------------------------------- benchmark (TICKET-04 §1)
+// /?bench=1&seed=42&duration=30 — standard scene, no input, orbiting camera; scripts/bench.js reads
+// window.__bench. Creative extras are off here: no hand lantern, no shake/flash, no drifters/wind.
+const NO_INPUT = { move: [0, 0], camYaw: 0, jump: false, interact: false, pulse: false, dash: false, pause: false };
+function rendererInfo() {
+  const gl = renderer.getContext();
+  const ext = gl.getExtension("WEBGL_debug_renderer_info");
+  const gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  const chrome = (navigator.userAgent.match(/Chrome\/[\d.]+/) || ["browser"])[0];
+  return `three.js r${THREE.REVISION} WebGL2 · ${chrome} · ${gpu}`;
+}
+function startBench() {
+  const seed = Number(PARAMS.get("seed") ?? 42) | 0;
+  const duration = Number(PARAMS.get("duration") ?? 30);
+  app.game = new Game({ seed, night: 1, scenario: buildBenchScenario(seed), bench: true });
+  app.world = new World(scene, app.game);
+  app.world.setFirstPerson(false); // Mây visible, standing at (0,0,0)
+  hand.visible = false;
+  show("play");
+  $("crosshair").classList.add("hidden");
+  const B = (window.__bench = { phase: "warmup", seed, duration, shades: app.game.shades.length, motes: app.game.motes.length });
+  const dts = [];
+  let t0 = null, lastT = 0, accB = 0;
+  const benchFrame = (now) => {
+    if (t0 === null) { t0 = now; lastT = now; B.firstFrameEpoch = performance.timeOrigin + now; }
+    const dtMs = now - lastT;
+    lastT = now;
+    const el = (now - t0) / 1000;
+    accB += Math.min(0.1, dtMs / 1000);
+    while (accB >= DT) { app.game.step(NO_INPUT); accB -= DT; }
+    const [cx, cy, cz] = benchCamera(el);
+    camera.position.set(cx, cy, cz);
+    camera.lookAt(0, 0, 0);
+    app.world.sync(app.game, now / 1000, dtMs / 1000, camera);
+    updateHUD();
+    renderer.render(scene, camera);
+    if (el >= BENCH.warmupS) {
+      if (B.phase === "warmup") B.phase = "measure"; // first frame past warm-up only opens the window
+      else {
+        dts.push(dtMs);
+        if (dtMs > 25) (B.spikes ||= []).push([+el.toFixed(2), +dtMs.toFixed(1)]); // diagnostics: slow frames
+      }
+    }
+    if (el >= BENCH.warmupS + duration) {
+      Object.assign(B, benchStats(dts), { renderer: rendererInfo(), phase: "done" });
+      return;
+    }
+    requestAnimationFrame(benchFrame);
+  };
+  requestAnimationFrame(benchFrame);
+}
+
+if (IS_BENCH) startBench();
+else { show("menu"); requestAnimationFrame(frame); }

@@ -102,6 +102,25 @@ Nguồn sự thật: `src/core/config.js` (tuning), `src/core/maps.js` (bản đ
   kích hoạt.
 - Thắng ở bình minh: mỗi đèn sáng `50 + floor(fuelU / 60)`, mỗi Ngọn Lửa 50. Thua không có thưởng.
 
+## Phase 4 — TICKET-04
+
+- **Bench, "Bóng Mực vẫn di chuyển theo luật wander bình thường"**: Bóng giữ trạng thái `wander` (không chuyển
+  `chase` khi gần Mây), vì ticket mô tả 200 Bóng wander và cảnh phải giống nhau cho mọi bài. Chúng vẫn tuân
+  luật wander của TICKET-03 (lượn quanh đèn tắt gần nhất, bị chặn bởi vùng an toàn của L1–L3).
+- Bench rải Bóng/đom đóm **đều theo diện tích** đĩa bán kính 39 m (r = 39·√u); Bóng không đặt trong vùng an
+  toàn 6 m của L1–L3 (nếu đặt vào sẽ bị đẩy ra ngay khung đầu).
+- Camera bench dùng cùng quy ước góc của các ticket, `(x, z) = (r cos a, r sin a)`, nên "ngược chiều kim đồng
+  hồ" là `a` tăng dần; bắt đầu ở (30, 15, 0), đúng 15 giây một vòng, tính từ khung đầu tiên của cảnh bench.
+- `load_ms` = thời điểm khung đầu của cảnh bench (epoch của trang) − thời điểm tiến trình `bench.js` bắt đầu
+  (`Date.now() − process.uptime()`); gồm cả thời gian mở Chrome.
+- Khoảng đo: khung đầu tiên sau 3 giây khởi động chỉ mở cửa sổ đo; mọi `dt` sau đó được tính cho tới khi đủ
+  `--duration` giây. `frame_ms_p95` dùng phân vị **nearest-rank**.
+- Soak: Đêm i (0-based) dùng `seed + i`, Đêm `(i mod 3) + 1`; mỗi Đêm chạy tối đa đúng thời lượng chuẩn
+  (+1 tick bình minh). Nút bấm ngẫu nhiên được đưa trực tiếp làm "cạnh bấm" của tick đó.
+  `mem_start` đo ngay sau khi dựng xong Game của Đêm đầu (trước khi chạy tick nào).
+- Bảng xếp hạng: `score` = tổng điểm các Đêm đã thắng của lượt chơi; `seed` = seed của lượt chơi (Đêm n dùng
+  `seed + n − 1`); tên chuẩn hoá NFC rồi kiểm `^[\p{L}\p{N}_]{3,12}$` (cho phép tiếng Việt có dấu).
+
 ### Điểm & kết thúc
 - `score` trong snapshot/end là điểm **của Đêm đang chạy** (cộng dồn kể cả khi thua). Bản chơi
   hiển thị tổng các Đêm đã thắng theo ticket.

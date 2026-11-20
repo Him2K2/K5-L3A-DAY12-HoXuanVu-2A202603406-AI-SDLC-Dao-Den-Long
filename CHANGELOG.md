@@ -1,14 +1,47 @@
 # Changelog
 
-## [Unreleased]
+## [phase-4 / v1.0.0] — Contract v1.3 · TICKET-04 "Bình minh: phát hành v1.0.0" (2026-11-20)
 
-### Bản chơi (không đổi contract, không đổi output headless)
-- **Góc nhìn thứ nhất mặc định** theo yêu cầu playtest: di chuột là xoay góc nhìn (ngang + dọc, dọc giới hạn ±80°),
-  chuột tự khoá khi vào đảo / tiếp tục; tâm ngắm giữa màn hình; đèn lồng nhỏ cầm tay ở góc dưới phải;
-  thân Mây ẩn nhưng ánh sáng đèn lồng của Mây vẫn giữ.
-- Phím **V** đổi sang góc nhìn thứ ba (camera sau lưng, có xoay dọc); lựa chọn được lưu.
-- Lõi vẫn chỉ nhận `cam_yaw_deg` như contract; góc nhìn dọc thuần hiển thị. Đã kiểm: sau khi quay 45°,
-  W đi đúng hướng nhìn, D đi đúng sang phải màn hình (6 m/s).
+Spec: [docs/spec-phase4.md](docs/spec-phase4.md) · Retro: [docs/retro.md](docs/retro.md).
+
+### Thêm
+- **Benchmark** `node scripts/bench.js --seed 42 --duration 30 --out bench.json`: Puppeteer mở Chrome **có cửa sổ**
+  1280×720, tắt vsync, chạy cảnh chuẩn (Đêm 1, 200 Bóng `wander`, 100 đom đóm, L1–L3 sáng, camera bay vòng
+  r = 30, Y = 15, 15 giây một vòng, 3 giây khởi động). Ghi `avg_fps`, `p1_low_fps`, `frame_ms_p95`, `frames`,
+  `load_ms`, `peak_mem_mb` (RSS cả cây tiến trình Chrome). Lõi có thêm cờ `bench` (mặc định tắt) để tắt sinh
+  thêm / sát thương / nhặt / hao dầu / kết thúc Đêm.
+- **Soak** `node --expose-gc --no-opt scripts/soak.js --seed 7 --nights 10 --out soak.json`: 10 Đêm một tiến trình,
+  input ngẫu nhiên theo seed; ghi crashes, RSS đầu/cuối và `heapUsed` đầu/cuối.
+- **Bảng xếp hạng cục bộ**: nhập tên sau màn Bình Minh / khi thua (3–12 ký tự, có tiếng Việt có dấu), top 10,
+  lưu `data/leaderboard.json` qua server (bản web tĩnh dùng `localStorage`), màn hình từ menu,
+  `node server.js --export-leaderboard out.json`.
+- **Dễ tiếp cận**: đổi phím mọi hành động (báo trùng, khôi phục mặc định), phụ đề/chỉ báo hình ảnh (Bóng xuất hiện
+  + mũi tên mép màn hình, gió, 10 giây cuối, đèn cạn dầu, đèn tắt), giảm chuyển động (tắt rung/chớp/nhấp nháy),
+  chữ ≥ 18 px và chữ lớn ×1.25.
+- **Góc nhìn thứ nhất xoay theo chuột** như game bắn súng (ngang + dọc ±80°, khoá chuột khi vào đảo), có tâm ngắm
+  và đèn lồng cầm tay. Lõi vẫn chỉ nhận `cam_yaw_deg`.
+- Đóng gói: three.js r160 vendored (`web/vendor/`, chạy offline), `scripts/build-web.js` → zip web tĩnh cho
+  Release, `LICENSE` (MIT), README đầy đủ, retro, kịch bản video demo.
+
+### Thay đổi
+- `run_cmd` đổi từ `npm start` thành **`node server.js`** (để `--export-leaderboard` không bị npm nuốt cờ);
+  server tự mở trình duyệt (`--no-open` để tắt), chỉ nghe trên 127.0.0.1.
+- Thử nghiệm chế độ góc nhìn thứ ba bật bằng phím `V` đã **bị bỏ** theo phản hồi playtest: chỉ giữ một camera
+  xoay theo chuột.
+- Lõi giảm cấp phát mỗi tick (đom đóm lọc/nhặt tại chỗ, tái dùng bộ đệm sự kiện). Output headless không đổi
+  (test tất định vẫn byte-identical).
+
+### Sửa
+- `scripts/gen-evidence.js` từng xoá cả thư mục `evidence/<phase>/`, nên **ảnh Phase 2 bị xoá trước commit
+  `phase-2`**. Nay script chỉ thay phần do nó sinh ra; ảnh Phase 2 đã được khôi phục (xem
+  `evidence/phase2/screens/README.md`).
+- CSS: `html, body { font-size: 1rem }` làm chữ gốc thành 16 px; đã sửa để chữ gốc là 18 px.
+
+### Contract v1.3
+- `contract_version: "1.3"`, thêm `bench_cmd` và `soak_cmd`; v1.0–v1.2 giữ nguyên (selftest 60/60, gồm toàn bộ regression).
+
+## [phase-3+] — sau tag `phase-3`, trước Phase 4
+- Góc nhìn thứ nhất xoay theo chuột (bản đầu, kèm phím `V`; phím `V` đã bỏ ở Phase 4).
 
 ## [phase-3] — Contract v1.2 · TICKET-03 "Đèn cạn dầu" (2026-11-20)
 
@@ -61,7 +94,17 @@ Spec: [docs/spec-phase3.md](docs/spec-phase3.md).
 Mọi test khác của Phase 1–2 giữ nguyên và vẫn đạt (regression).
 
 ## [phase-2] — Contract v1.1 · TICKET-02 "Ba hòn đảo"
-3 Đêm chuẩn hoá, Lướt, Gió Lạc, Bùa Gió, gió mạnh, tạm dừng, menu/HUD/âm thanh. Chi tiết: `docs/spec-phase2.md`.
+Spec: `docs/spec-phase2.md`.
+- **Breaking:** mọi số liệu tự chọn ở Phase 1 bị thay bằng số chuẩn (sức chứa 10, chi phí đèn 10, Tỏa Sáng 3 đom đóm,
+  rơi khỏi đảo bị phạt, thời lượng 300 / 330 / 360 s…); điểm +10 mỗi đom đóm **nạp** (thay vì nhặt).
+- 3 Đêm theo bản đồ chuẩn (Đảo Bến, Đảo Cau có cầu tre + bục nhảy, Đảo Chuông 3 tầng + dốc + tháp chuông + gió mạnh).
+- Lướt, Gió Lạc, Bùa Gió, tạm dừng; trạng thái Bóng Mực `spawning/wander/chase/recoil/stunned`; thứ tự 12 bước/tick.
+- Bản chơi: menu → giới thiệu Đêm (Ông Đăng) → chơi → kết quả → Bình Minh; HUD đầy đủ; cài đặt được lưu;
+  âm thanh WebAudio; bảng màu chuẩn.
+- Contract v1.1: `--night 1|2|3`, snapshot/scenario/sự kiện mở rộng.
+- Sửa lỗi playtest Phase 1: phím A/D bị ngược; cảnh quá tối (three.js dùng đơn vị ánh sáng vật lý).
 
 ## [phase-1] — Contract v1.0 · PRD-0
-Lõi tất định + headless + bản chơi web Đêm 1.
+- Lõi mô phỏng tất định (`src/core/`) dùng chung cho headless và bản chơi; PRNG theo seed.
+- Headless theo Test Contract v1.0 (JSONL snapshot/event/end, exit code 2 khi file sai định dạng).
+- Bản chơi web three.js Đêm 1: nhặt đom đóm, thắp 5 đèn, Bóng Mực, Tỏa Sáng, HUD, chơi lại.

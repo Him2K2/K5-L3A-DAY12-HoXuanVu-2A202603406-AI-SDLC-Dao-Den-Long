@@ -534,6 +534,86 @@ test("P3.22/23 snapshot + scenario v1.2 fields (fuel 1 dp, ever_lit, relit_count
     s.player.capacity === 10 && s.shades[0].state === "drain" && s.shades[0].target_lantern_id === "L1") || show([l1, l2, l3, s.shades[0]]);
 });
 
+console.log("— Phase 4: TICKET-04 (Contract v1.3) —");
+{
+  const { buildBenchScenario, benchCamera, BENCH } = await import("../src/bench/scene.js");
+  const { benchStats } = await import("../src/bench/stats.js");
+  const { makeSoakInput, runNight } = await import("./soak.js");
+  const LB = await import("../src/leaderboard.js");
+
+  test("P4.1 bench scene: 200 wander shades + 100 motes spread on the island (seed 42), L1-L3 lit fuel 100, Mây at origin", () => {
+    const sc = buildBenchScenario(42);
+    const g = new Game({ seed: 42, night: 1, scenario: sc, bench: true });
+    const s0 = snapshotLine(g);
+    const inIsland = s0.shades.every((s) => Math.hypot(s.pos[0], s.pos[2]) <= 40) && s0.motes.every((m) => Math.hypot(m.pos[0], m.pos[2]) <= 40);
+    const outsideZones = s0.shades.every((s) => s0.lanterns.slice(0, 3).every((l) => dist2(s.pos, l.pos) >= 6));
+    const quadrants = [0, 0, 0, 0];
+    for (const s of s0.shades) quadrants[(s.pos[0] >= 0 ? 0 : 1) + (s.pos[2] >= 0 ? 0 : 2)]++;
+    const again = JSON.stringify(buildBenchScenario(42)) === JSON.stringify(sc);
+    return (s0.shades.length === 200 && s0.shades.every((s) => s.state === "wander") && s0.motes.length === 100 &&
+      show(s0.lanterns.map((l) => [l.lit, l.fuel])) === "[[true,100],[true,100],[true,100],[false,0],[false,0]]" &&
+      show(s0.player.pos) === "[0,0,0]" && inIsland && outsideZones && quadrants.every((q) => q > 30) && again) ||
+      show({ n: s0.shades.length, m: s0.motes.length, inIsland, outsideZones, quadrants, again });
+  });
+  test("P4.2 bench disables spawns, damage, pickups, fuel decay and night end; shades still wander", () => {
+    const g = new Game({ seed: 42, night: 1, scenario: buildBenchScenario(42), bench: true });
+    const before = g.shades.map((s) => [s.x, s.z]);
+    const names = new Set();
+    const NO = { move: [0, 0], camYaw: 0 };
+    for (let k = 0; k < 60 * 40; k++) for (const e of g.step(NO)) names.add(e.name);
+    const moved = g.shades.filter((s, i) => Math.hypot(s.x - before[i][0], s.z - before[i][1]) > 0.5).length;
+    const s = snapshotLine(g);
+    return (names.size === 0 && g.state === "playing" && s.shades.length === 200 && s.motes.length === 100 &&
+      s.lanterns.slice(0, 3).every((l) => l.fuel === 100) && s.player.flames === 3 && s.shades.every((x) => x.state === "wander") && moved > 150) ||
+      show({ names: [...names], state: g.state, moved, fuel: s.lanterns.map((l) => l.fuel) });
+  });
+  test("P4.3 bench camera: r=30, y=15, starts at (30,15,0), counter-clockwise (ticket angle convention), 15 s per lap", () => {
+    const at = (t) => benchCamera(t).map((v) => +v.toFixed(6));
+    return (show(at(0)) === "[30,15,0]" && show(at(3.75)) === "[0,15,30]" && show(at(7.5)) === "[-30,15,0]" &&
+      show(at(15)) === "[30,15,0]" && BENCH.warmupS === 3) || show([at(0), at(3.75), at(7.5), at(15)]);
+  });
+  test("P4.5 bench stats: avg = 1000N/sum, p1 low = 1000/mean(k worst), k = max(1, ceil(0.01N)), p95 nearest-rank", () => {
+    const a = benchStats([...Array(99).fill(10), 100]); // N=100: k=1 -> worst 100 ms -> 10 fps
+    const b = benchStats([...Array(247).fill(5), 40, 50, 60]); // N=250: k=3 -> mean 50 -> 20 fps
+    return (a.frames === 100 && a.avg_fps === 91.7 && a.p1_low_fps === 10 && a.frame_ms_p95 === 10 &&
+      b.frames === 250 && b.p1_low_fps === 20 && b.frame_ms_p95 === 5 && b.avg_fps === +(1000 * 250 / (247 * 5 + 150)).toFixed(1)) || show([a, b]);
+  });
+  test("P4.6 soak inputs are seeded (same seed => same stream) with the ticket's rates; a night runs to its end", () => {
+    const take = (seed) => { const f = makeSoakInput(seed); return Array.from({ length: 6000 }, (_, t) => { const i = f(t); return [i.move[0], i.jump, i.dash, i.pulse, i.interact]; }); };
+    const x = take(7), y = take(7), z = take(8);
+    const rate = (j) => x.filter((r) => r[j]).length / x.length;
+    const dirChanges = x.filter((r, t) => t > 0 && r[0] !== x[t - 1][0]).length;
+    const { res } = runNight(1, 7);
+    return (JSON.stringify(x) === JSON.stringify(y) && JSON.stringify(x) !== JSON.stringify(z) &&
+      near(rate(1), 0.05, 0.01) && near(rate(2), 0.03, 0.01) && near(rate(3), 0.02, 0.01) && near(rate(4), 0.10, 0.015) &&
+      dirChanges <= 200 && ["won", "lost"].includes(res.result)) || show({ rates: [1, 2, 3, 4].map(rate), dirChanges, res });
+  });
+  test("P4.7 leaderboard: names 3-12 [A-Za-z0-9_] (+ Vietnamese), ISO time zone, top 10, score desc then earliest first", () => {
+    const names = ["ab", "abc", "Mây_đêm1", "a b c", "abcdefghijklm", "x-y-z", "Nguyễn_An"].map((n) => LB.validateName(n).ok);
+    const e = (name, score, at) => ({ name, score, nights_won: 1, achieved_at: at, seed: 1 });
+    let board = [];
+    board = LB.addEntry(board, e("late", 500, "2026-11-20T10:00:00+07:00")).entries;
+    board = LB.addEntry(board, e("early", 500, "2026-11-20T09:00:00+07:00")).entries;
+    board = LB.addEntry(board, e("top", 900, "2026-11-21T09:00:00+07:00")).entries;
+    for (let i = 0; i < 9; i++) board = LB.addEntry(board, e(`p${i}xx`, 100 + i, "2026-11-19T00:00:00Z")).entries;
+    const iso = LB.isoWithOffset(new Date());
+    return (show(names) === "[false,true,true,false,false,false,true]" && board.length === 10 &&
+      show(board.slice(0, 3).map((x) => x.name)) === '["top","early","late"]' && board.at(-1).score === 102 &&
+      /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$/.test(iso) && LB.validateEntry(e("okay", 1, "2026-11-20T10:00:00")).ok === false) ||
+      show({ names, board: board.map((x) => `${x.name}:${x.score}`), iso });
+  });
+  test("P4.8 --export-leaderboard writes {entries:[...]} ranked, top 10, invalid rows dropped", () => {
+    const file = path.join(tmp, "lb.json"), out = path.join(tmp, "lb-out.json");
+    const rows = Array.from({ length: 12 }, (_, i) => ({ name: `player${i}`, score: (i * 37) % 11 * 10, nights_won: i % 4, achieved_at: `2026-11-${10 + i}T12:00:00+07:00`, seed: i }));
+    rows.push({ name: "x", score: 9999, nights_won: 3, achieved_at: "2026-11-01T00:00:00Z", seed: 0 }); // invalid name
+    fs.writeFileSync(file, JSON.stringify({ entries: rows }));
+    execFileSync("node", [path.join(root, "server.js"), "--export-leaderboard", out], { env: { ...process.env, DDL_LEADERBOARD: file } });
+    const got = JSON.parse(fs.readFileSync(out, "utf8")).entries;
+    const sorted = got.every((x, i) => i === 0 || got[i - 1].score > x.score || (got[i - 1].score === x.score && Date.parse(got[i - 1].achieved_at) <= Date.parse(x.achieved_at)));
+    return (got.length === 10 && sorted && !got.some((x) => x.name === "x")) || show(got);
+  });
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 fs.rmSync(tmp, { recursive: true, force: true });
 process.exit(fail ? 1 : 0);

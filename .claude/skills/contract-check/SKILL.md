@@ -29,5 +29,11 @@ Run these from the repo root, in order, and stop at the first failure.
    in `CHANGELOG.md`. Never skip a test silently. Evidence goes to `evidence/<phase>/`
    (`PHASE=phase4 node scripts/gen-evidence.js`).
 
-5. **Report honestly**: paste the pass/fail counts; mention anything only checked manually
+5. **Release checks (Phase 4+)**: `node --expose-gc --no-opt scripts/soak.js --seed 7 --nights 10 --out soak.json`
+   must give `crashes: 0` and `pass: true`. The benchmark (`node scripts/bench.js --seed 42 --duration 30 --out
+   bench.json`) opens a real Chrome window on the user's machine: **ask the user before running it** and tell them
+   not to close the window. Before tagging, confirm hand-made evidence is tracked:
+   `git ls-tree -r --name-only HEAD -- evidence/<phase>`.
+
+6. **Report honestly**: paste the pass/fail counts; mention anything only checked manually
    (GUI screens, audio, FPS) and how.

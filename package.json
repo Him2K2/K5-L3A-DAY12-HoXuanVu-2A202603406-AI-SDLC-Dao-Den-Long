@@ -3,13 +3,21 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Dao Den Long - a 3D lantern-lighting game with a deterministic headless simulation (Test Contract v1.0).",
+  "description": "Dao Den Long - a 3D lantern-keeping game with a deterministic headless simulation (Test Contract v1.3).",
   "scripts": {
     "start": "node server.js",
     "headless": "node src/headless/run.js",
-    "selftest": "node scripts/selftest.js"
+    "selftest": "node scripts/selftest.js",
+    "bench": "node scripts/bench.js --seed 42 --duration 30 --out bench.json",
+    "soak": "node --expose-gc --no-opt scripts/soak.js --seed 7 --nights 10 --out soak.json",
+    "build:web": "node scripts/build-web.js",
+    "evidence": "node scripts/gen-evidence.js"
   },
   "engines": {
     "node": ">=18"
-  }
+  },
+  "optionalDependencies": {
+    "puppeteer": "22.15.0"
+  },
+  "license": "MIT"
 }

@@ -15,3 +15,8 @@ secrets.*
 # OS
 .DS_Store
 Thumbs.db
+
+# runtime data / build output / local scratch
+data/
+dist/
+scratch-bench/

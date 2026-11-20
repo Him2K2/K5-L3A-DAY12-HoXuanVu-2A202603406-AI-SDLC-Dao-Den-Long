@@ -37,7 +37,10 @@ const SHADE_STATES = ["spawning", "wander", "chase", "recoil", "stunned", "drain
 const DRIFTER_STATES = ["idle", "chase", "flee", "removed"];
 
 export class Game {
-  constructor({ seed = 0, night = 1, tuning, scenario } = {}) {
+  constructor({ seed = 0, night = 1, tuning, scenario, bench = false } = {}) {
+    // bench (TICKET-04): standard benchmark scene — no spawns, damage, pickups, fuel decay or night end;
+    // shades keep wandering. Default false, so headless/contract output is unchanged.
+    this.bench = !!bench;
     this.seed = seed >>> 0;
     this.rng = makeRNG(this.seed);
     this.t = cloneTuning(tuning);
@@ -313,7 +316,9 @@ export class Game {
    * Buttons are TRUE only on the tick their press begins (false -> true).
    */
   step(input) {
-    this.pending = [];
+    // Reused event buffer (no allocation per tick). Callers consume the returned events before the
+    // next step(); copy them if you need to keep them.
+    this.pending.length = 0;
     if (this.state !== "playing") return this.pending;
     this.tick += 1;
 
@@ -361,11 +366,14 @@ export class Game {
       }
     }
     this._fuelTick();
-    this.motes = this.motes.filter((m) => {
-      if (m.kind !== "dropped") return true;
+    // In place (no new array per tick): age dropped motes, compact only when one expires.
+    let expired = false;
+    for (const m of this.motes) {
+      if (m.kind !== "dropped") continue;
       m.ttl = dec(m.ttl);
-      return m.ttl > 0;
-    });
+      if (m.ttl === 0) expired = true;
+    }
+    if (expired) this.motes = this.motes.filter((m) => m.kind !== "dropped" || m.ttl > 0);
     for (const c of this.charms) {
       if (!c.available) { c.respawn = dec(c.respawn); if (c.respawn === 0) c.available = true; }
     }
@@ -382,6 +390,7 @@ export class Game {
 
   // 2b. fuel (TICKET-03): decay + drain in step 2, then lanterns at <= 0 go out right after.
   _fuelTick() {
+    if (this.bench) return;
     const t = this.t;
     // Units of 1/60 fuel removed per tick: 1.0 fuel/s -> 1 unit/tick, 5 fuel/s -> 5 units/tick.
     const decay = Math.round((t.fuel_decay_per_s * R.FUEL_U) / TICK_HZ);
@@ -503,17 +512,18 @@ export class Game {
   // 4. pickups
   _pickups() {
     const p = this.player, t = this.t;
-    if (p.fallen) return;
-    const keep = [];
+    if (p.fallen || this.bench) return;
     const cap = this.capacity; // TICKET-03: grows with successful lights
+    let picked = null; // allocated only on the (rare) tick something is picked up
     for (const m of this.motes) {
       if (p.carried < cap &&
           dXZ(p.x, p.z, m.x, m.z) <= t.pickup_radius && Math.abs(p.y - m.y) <= R.PICKUP_DY) {
         p.carried += 1;
         this.emit("mote_picked", { carried: p.carried });
-      } else keep.push(m);
+        (picked ||= new Set()).add(m);
+      }
     }
-    this.motes = keep;
+    if (picked) this.motes = this.motes.filter((m) => !picked.has(m));
     for (const c of this.charms) {
       if (c.available && dXZ(p.x, p.z, c.x, c.z) <= t.pickup_radius && Math.abs(p.y - c.y) <= R.PICKUP_DY) {
         c.available = false; c.respawn = R.CHARM_RESPAWN_T;
@@ -639,7 +649,7 @@ export class Game {
       if (sh.state === "drain") this._drainCheck(sh, d);
       if (sh.eject) continue;
       if (sh.state === "chase" && d > R.SHADE_GIVEUP) { sh.state = "wander"; sh.home = [sh.x, sh.z]; sh.target = null; }
-      else if (sh.state === "wander" && d <= R.SHADE_DETECT) sh.state = "chase";
+      else if (sh.state === "wander" && d <= R.SHADE_DETECT && !this.bench) sh.state = "chase";
 
       if (sh.state === "stunned") {
         if (sh.pushLeft > 0) {
@@ -748,7 +758,7 @@ export class Game {
   // 9. contacts — drifters steal first, then at most one shade hit (ascending id)
   _contacts() {
     const p = this.player, t = this.t;
-    if (p.fallen) return;
+    if (p.fallen || this.bench) return;
     for (const d of this.drifters) {
       if ((d.state !== "idle" && d.state !== "chase") || d.hasStolen || p.carried <= 0) continue;
       if (dXZ(d.x, d.z, p.x, p.z) > R.DRIFTER_TOUCH) continue;
@@ -775,6 +785,7 @@ export class Game {
 
   // 10. scheduled spawns (new entities interact from the next tick)
   _spawns(st) {
+    if (this.bench) return;
     const map = this.map, p = this.player;
     if (this.autoMotes && st % R.MOTE_SPAWN_EVERY === 0 && this.motes.length < R.MOTE_CAP) {
       const free = [];
@@ -789,7 +800,7 @@ export class Game {
       let n = 0;
       if (st === R.SHADE_FIRST_SPAWN) n = 2;
       else if (st > R.SHADE_FIRST_SPAWN && (st - R.SHADE_FIRST_SPAWN) % map.shadeEvery === 0) n = 1;
-      const used = new Set();
+      const used = n ? new Set() : null;
       for (let k = 0; k < n && this.shades.length < map.shadeMax; k++) {
         const valid = [];
         map.shadePoints.forEach((q, i) => {
@@ -821,6 +832,7 @@ export class Game {
   // 11. win / lose
   // TICKET-03: no early win. no_flames always first; at dawn, enough lit lanterns => won.
   _judge() {
+    if (this.bench) return;
     const p = this.player;
     if (p.flames <= 0) return this._gameOver("lost", "no_flames");
     if (this.timeLeft <= EPS) {

@@ -6,38 +6,40 @@
   <title>Đảo Đèn Lồng</title>
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="/web/style.css" />
-  <!-- Three.js via CDN (GUI only; the headless sim has zero dependencies). -->
+  <!-- Three.js r160 vendored in web/vendor (MIT) so the game runs offline and as a static folder. -->
   <script type="importmap">
-  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  { "imports": { "three": "/web/vendor/three.module.js" } }
   </script>
 </head>
 <body>
   <div id="stage"></div>
+  <div id="flash"></div>
 
-  <!-- ===== HUD (AC3.11) ===== -->
+  <!-- ===== HUD ===== -->
   <div id="hud" class="hidden">
     <div id="hud-flames" class="hud-tl"></div>
-    <div id="hud-time" class="hud-tc">05:00</div>
+    <div id="hud-time" class="hud-tc">04:00</div>
     <div class="hud-tr">
       <div><span class="lbl">Đèn sáng</span> <b id="hud-lanterns">0/5</b> <span id="hud-need" class="need">cần 3</span></div>
       <div><span class="lbl">Điểm</span> <b id="hud-score" class="gold">0</b></div>
     </div>
     <div id="motebar" class="hud-bc"></div>
     <div class="hud-br">
-      <div id="cd-dash" class="cd"><span>Lướt</span><kbd>Shift</kbd></div>
-      <div id="cd-pulse" class="cd"><span>Tỏa Sáng</span><kbd>Q</kbd></div>
+      <div id="cd-dash" class="cd"><span>Lướt</span></div>
+      <div id="cd-pulse" class="cd"><span>Tỏa Sáng</span></div>
     </div>
     <div id="charm-ind" class="hidden">Bùa Gió</div>
     <div id="prompt" class="hidden">E — Nạp ánh sáng (0/10)</div>
     <div id="wind-warn" class="hidden">🍃 Gió sắp nổi!</div>
     <div id="fuel-warn" class="hidden">Đèn sắp cạn dầu</div>
+    <div id="captions" aria-live="polite"></div>
     <div id="arrow" class="hidden">➤</div>
+    <div id="spawn-arrows"></div>
     <div id="crosshair" class="hidden"></div>
-    <div id="cam-mode">Góc nhìn thứ nhất · V</div>
   </div>
   <div id="fps">— FPS</div>
 
-  <!-- ===== Screens (AC3.7 – AC3.9) ===== -->
+  <!-- ===== Screens ===== -->
   <div id="scr-menu" class="screen">
     <div class="card wide">
       <div class="kicker">Một đêm giữa biển mây</div>
@@ -45,13 +47,16 @@
       <p class="muted">Giúp Mây thu đom đóm, thắp và châm dầu cho Đèn Lồng Lớn — giữ đảo sáng tới bình minh.</p>
       <button id="btn-start" class="primary">Bắt đầu</button>
       <div class="row">
-        <span class="muted small">Chơi thử:</span>
+        <span class="muted">Chơi thử:</span>
         <button id="btn-night1" class="ghost">Đêm 1</button>
         <button id="btn-night2" class="ghost">Đêm 2</button>
         <button id="btn-night3" class="ghost">Đêm 3</button>
       </div>
-      <button id="btn-menu-settings" class="ghost">Cài đặt</button>
-      <p class="controls">WASD chạy · Di chuột nhìn quanh · V đổi góc nhìn thứ nhất/thứ ba · Space nhảy · Shift lướt · E thắp đèn / châm dầu · Q tỏa sáng · Esc/P tạm dừng</p>
+      <div class="row">
+        <button id="btn-board" class="ghost">Bảng xếp hạng</button>
+        <button id="btn-menu-settings" class="ghost">Cài đặt</button>
+      </div>
+      <p class="controls">WASD chạy · Di chuột xoay góc nhìn · Space nhảy · Shift lướt · E thắp/châm dầu · Q tỏa sáng · Esc/P tạm dừng (đổi phím trong Cài đặt)</p>
     </div>
   </div>
 
@@ -59,7 +64,7 @@
     <div class="card">
       <h2 id="intro-title">Đêm 1</h2>
       <p class="quote" id="intro-quote"></p>
-      <p class="muted small">— Ông Đăng, người giữ đèn già</p>
+      <p class="muted">— Ông Đăng, người giữ đèn già</p>
       <p class="muted" id="intro-meta"></p>
       <button id="btn-begin" class="primary">Vào đảo (Enter)</button>
     </div>
@@ -76,14 +81,21 @@
   </div>
 
   <div id="scr-settings" class="screen hidden">
-    <div class="card">
+    <div class="card wide scroll">
       <h2>Cài đặt</h2>
       <label class="setting">Âm lượng <span id="lbl-volume">70%</span>
         <input id="set-volume" type="range" min="0" max="100" step="1" /></label>
       <label class="setting">Độ nhạy chuột <span id="lbl-sens">1.0×</span>
         <input id="set-sens" type="range" min="0.2" max="3" step="0.1" /></label>
+      <h3>Dễ tiếp cận</h3>
       <label class="setting check"><input id="set-cb" type="checkbox" /> Bảng màu dễ phân biệt (mù màu)</label>
-      <p class="muted small">Được lưu lại cho lần mở game sau.</p>
+      <label class="setting check"><input id="set-rm" type="checkbox" /> Giảm chuyển động (tắt rung camera, chớp màn hình)</label>
+      <label class="setting check"><input id="set-large" type="checkbox" /> Chữ lớn (×1.25)</label>
+      <h3>Phím</h3>
+      <div id="keylist"></div>
+      <p id="key-msg" class="keymsg" role="status"></p>
+      <button id="btn-keys-reset" class="ghost">Khôi phục phím mặc định</button>
+      <p class="muted">Mọi cài đặt được lưu cho lần mở game sau. Esc luôn tạm dừng; ◀ ▶ xoay camera bằng phím.</p>
       <button id="btn-settings-back" class="primary">Quay lại</button>
     </div>
   </div>
@@ -92,6 +104,11 @@
     <div class="card">
       <h2 id="result-title">Kết quả</h2>
       <p id="result-sub" class="muted"></p>
+      <div id="result-entry" class="entry hidden">
+        <p id="result-msg" class="muted"></p>
+        <input id="result-name" type="text" maxlength="12" placeholder="Tên (3–12 ký tự)" autocomplete="off" />
+        <button id="btn-result-save" class="ghost">Lưu điểm</button>
+      </div>
       <button id="btn-next" class="primary">Đêm kế tiếp</button>
       <button id="btn-retry" class="primary hidden">Chơi lại Đêm</button>
       <button id="btn-result-menu" class="ghost">Về menu</button>
@@ -104,8 +121,23 @@
       <h1>Quần đảo đã sáng trở lại</h1>
       <p class="muted">Tổng điểm</p>
       <div id="dawn-score" class="bigscore">0</div>
-      <p id="dawn-breakdown" class="muted small"></p>
-      <button id="btn-dawn-menu" class="primary">Về menu</button>
+      <p id="dawn-breakdown" class="muted"></p>
+      <div id="dawn-entry" class="entry hidden">
+        <p id="dawn-msg" class="muted"></p>
+        <input id="dawn-name" type="text" maxlength="12" placeholder="Tên (3–12 ký tự)" autocomplete="off" />
+        <button id="btn-dawn-save" class="primary">Lưu điểm</button>
+      </div>
+      <button id="btn-dawn-menu" class="ghost">Về menu</button>
+    </div>
+  </div>
+
+  <div id="scr-board" class="screen hidden">
+    <div class="card wide scroll">
+      <h2>Bảng xếp hạng</h2>
+      <p id="board-note" class="gold"></p>
+      <div id="board-table"></div>
+      <p id="board-where" class="muted"></p>
+      <button id="btn-board-back" class="primary">Về menu</button>
     </div>
   </div>
 

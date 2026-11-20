@@ -1,5 +1,7 @@
-// Regenerate evidence/<PHASE>/ (default phase3) from scratch through the real headless CLI.
+// Regenerate the GENERATED part of evidence/<PHASE>/ (default phase4) through the real headless CLI.
 // Run: node scripts/gen-evidence.js   (exit 0 = every case met its expectation)
+// Only cases/, *.jsonl and SUMMARY.md are replaced. Hand-made evidence (screens/, selftest.txt, …) is
+// never touched — wiping the whole folder once silently deleted the Phase-2 screenshots before commit.
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
@@ -7,10 +9,12 @@ import { execFileSync } from "node:child_process";
 
 const root = path.dirname(path.dirname(url.fileURLToPath(import.meta.url)));
 const RUN = path.join(root, "src/headless/run.js");
-const PHASE = process.env.PHASE || "phase3";
+const PHASE = process.env.PHASE || "phase4";
 const ev = path.join(root, "evidence", PHASE);
 const work = path.join(ev, "cases");
-fs.rmSync(ev, { recursive: true, force: true });
+fs.mkdirSync(ev, { recursive: true });
+fs.rmSync(work, { recursive: true, force: true });
+for (const f of fs.readdirSync(ev)) if (f.endsWith(".jsonl") || f === "SUMMARY.md") fs.rmSync(path.join(ev, f));
 fs.mkdirSync(work, { recursive: true });
 
 const { cases } = JSON.parse(fs.readFileSync(path.join(root, "tests/headless-cases.json"), "utf8"));
