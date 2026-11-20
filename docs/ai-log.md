@@ -25,7 +25,8 @@ Ghi lại việc dùng AI theo yêu cầu lab (quy trình, lỗi AI, hiệu qu�
 **Hiệu quả harness (`AGENTS.md`):** việc bắt buộc "kế hoạch kiểm chứng trước khi code" +
 `check-contract.js` giúp phát hiện lệch tuning sớm và giữ tất định.
 
-**Token/chi phí:** _(điền sau khi đối chiếu usage của phiên — ví dụ: `/usage` trong Claude Code)._
+**Token/chi phí:** Phase 1 và 2 làm trong cùng một phiên Claude Code nên đo gộp. Xem số đo cuối Phase 2 và bảng
+"Tổng hợp token / chi phí" ở cuối file.
 
 ## Phase 2 — TICKET-02 "Ba hòn đảo" (2026-11-20)
 
@@ -60,7 +61,8 @@ chuẩn hoá bước "chạy thật" trước khi coi là xong.
 tạm dừng làm `simTick` đứng yên; cài đặt còn sau khi tải lại. Âm thanh chưa được nghe kiểm bởi người
 (môi trường test không có loa) — cần người chơi xác nhận.
 
-**Token/chi phí:** _(điền từ usage của phiên)._
+**Token/chi phí (đo lúc xong Phase 2, gộp cả Phase 1):** context phiên **~358 000 token**; hạn mức 5 giờ đã dùng
+**55%**; hạn mức tuần đã dùng **9%**; gói Pro, *extra usage* tắt → không phát sinh chi phí ngoài thuê bao.
 
 ## Phase 3 — TICKET-03 "Đèn cạn dầu" (2026-11-20)
 
@@ -87,7 +89,7 @@ bảng trong CHANGELOG → thêm 16 test P3 (53/53) và 10 case headless (25/25)
 20 → 14 sau 60 tick, cảnh báo + tia hút, chế độ mù màu (lưu, ⚠ trắng, đèn rách/xẹp), thua `dawn` 2/5,
 thắng Đêm 3 → màn Bình Minh, điểm 885 khớp tính tay. Âm thanh vẫn chưa được người nghe kiểm.
 
-**Token/chi phí:** _(điền từ usage của phiên)._
+**Token/chi phí:** không đo riêng; được gộp vào phần tăng giữa lúc xong Phase 2 và lúc xong Phase 4 (bảng cuối file).
 
 ## Phase 4 — TICKET-04 "Bình minh: phát hành v1.0.0" (2026-11-20)
 
@@ -111,11 +113,34 @@ contract v1.3 → 7 test P4 (60/60) → đóng gói release → tài liệu.
 - **Mất ảnh Phase 2**: `gen-evidence.js` xoá cả thư mục evidence, mà lần chạy cuối của Phase 2 diễn ra sau khi
   đã chép ảnh vào. Phát hiện khi cần ảnh cho README; khôi phục từ file chụp gốc và sửa script.
 
-**Token/chi phí:** _(điền từ usage của phiên)._
+**Token/chi phí (đo lúc xong Phase 4 + nộp bài):** context phiên **691 721 token**; hạn mức 5 giờ (cửa sổ hiện tại)
+**62%**; hạn mức tuần **19%**. Phase 3–4 (kể cả camera và chuẩn bị nộp bài) ≈ **+334 000 token context, +10% hạn mức tuần**.
 
-## Mẫu cho các phase sau
-- Ticket nhận: …
-- Giả định mới: …
-- Test thêm: …
-- Lỗi AI gặp: …
-- Token/chi phí: …
+## Tổng hợp token / chi phí (cả 4 phase)
+
+Nguồn số đo: bảng usage của app Claude desktop (`get_usage`), lấy lúc xong Phase 2 và lúc xong Phase 4.
+Toàn bộ dự án làm trong **một phiên** Claude Code (model Claude Opus), gói **Claude Pro**, *extra usage* **tắt**.
+
+| Chỉ số | Xong Phase 2 | Xong Phase 4 | Ghi chú |
+|--------|--------------|--------------|---------|
+| Context của phiên (token) | ~358 000 | **691 721** | Đo được. Cửa sổ 1 000 000; ~92% là hội thoại + kết quả tool |
+| Hạn mức tuần (mọi model) đã dùng | 9% | **19%** | Đo được |
+| Hạn mức 5 giờ đã dùng | 55% (cửa sổ 1) | 62% (cửa sổ 2) | Phiên kéo dài qua 2 cửa sổ 5 giờ |
+| Chi phí phát sinh thêm | 0 USD | **0 USD** | Không có tính tiền theo API; *extra usage* tắt |
+
+**Ước tính (không đo trực tiếp được):**
+- **Chi phí quy đổi theo thuê bao:** dùng 19% hạn mức một tuần ≈ 19% / ~4,3 tuần ≈ **4–5% hạn mức của một tháng** Pro,
+  tức chưa tới **1 USD** giá trị thuê bao (Pro ~20 USD/tháng).
+- **Tổng token đã xử lý (cộng dồn qua mọi lượt):** app không hiển thị con số này. Mỗi lượt gọi model đọc lại toàn bộ
+  context (phần lớn từ cache), nên tổng **lớn hơn nhiều** con số context. Ước lượng thô: vài trăm lượt gọi × context trung
+  bình vài trăm nghìn token ⇒ cỡ **hàng chục tới ~100 triệu token đầu vào** (chủ yếu là đọc cache), và cỡ **vài trăm nghìn
+  token đầu ra** (mã nguồn, test, tài liệu). Đây là ước lượng bậc độ lớn, không phải số đo.
+- Có 1 subagent (đọc `SUBMISSION.md`): **18 213 token**, đo được trong kết quả tool.
+
+**Đã tiết kiệm token bằng cách:** chạy test/evidence bằng script và chỉ đọc dòng tóm tắt (`grep FAIL`, `tail -1`); kiểm
+bản chơi bằng script đọc trạng thái thay vì chụp nhiều ảnh; gom nhiều kiểm tra vào một lần gọi; sửa file bằng diff nhỏ
+thay vì viết lại; chỉ đọc lại file khi nó đã đổi trên đĩa; không spawn agent song song (chỉ 1 subagent đọc trang web).
+
+**Prompt chính** (ngoài `AGENTS.md`/skill, để người khác dựng lại được quy trình): người dùng dán lần lượt PRD-0,
+TICKET-02/03/04 kèm yêu cầu "làm luôn cho đúng yêu cầu"; các phản hồi playtest ("sàn rất tối", "D sang trái A sang
+phải", "xoay chuột như game bắn súng, không phải nhiều góc nhìn"); và lệnh git ("commit", "push giúp tao").

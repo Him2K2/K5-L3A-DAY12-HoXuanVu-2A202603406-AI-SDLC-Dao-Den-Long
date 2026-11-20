@@ -17,4 +17,6 @@ Hoặc chạy từ mã nguồn: `git clone …` → `npm install` → `node serv
 - Góc nhìn thứ nhất xoay theo chuột như game bắn súng.
 - Chạy offline (three.js đóng gói sẵn).
 
+🎬 Video demo (2:40): `docs/demo/demo.mp4` trong repo.
+
 Chi tiết: `CHANGELOG.md` · Retro: `docs/retro.md` · Số đo của tác giả: `bench.json`, `soak.json`.

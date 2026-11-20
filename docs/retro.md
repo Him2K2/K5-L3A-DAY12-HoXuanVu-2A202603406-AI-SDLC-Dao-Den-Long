@@ -54,7 +54,15 @@
 4. Hook: không dùng. `check-contract` + selftest chạy đủ nhanh (< 15 s) để gọi tay mỗi bước.
 
 ## 6. Token / chi phí AI
-- **Tổng token và chi phí ước tính:** _(tác giả điền: xem usage của phiên trong Claude Code)_
+- **Số đo** (app Claude desktop, cả 4 phase làm trong một phiên Claude Code, model Claude Opus, gói Pro):
+  context cuối phiên **691 721 token** (xong Phase 2: ~358 000); hạn mức tuần đã dùng **19%** (xong Phase 2: 9%);
+  phiên kéo dài qua 2 cửa sổ 5 giờ (55% rồi 62%). *Extra usage* tắt nên **chi phí phát sinh thêm: 0 USD**.
+- **Ước tính:** khoảng 4–5% hạn mức một tháng của gói Pro, tức **dưới 1 USD** giá trị thuê bao. Tổng token xử lý cộng
+  dồn (mỗi lượt đọc lại context, phần lớn từ cache) ước lượng cỡ **hàng chục tới ~100 triệu token đầu vào** và **vài
+  trăm nghìn token đầu ra**. Đây là bậc độ lớn, app không hiển thị con số cộng dồn. Chi tiết và cách tính:
+  `docs/ai-log.md`, mục "Tổng hợp token / chi phí".
+- **Phân bổ:** Phase 1–2 tốn khoảng một nửa (9% tuần), Phase 3–4 + chuẩn bị nộp bài tốn nửa còn lại (+10% tuần).
+  Phase 4 tốn nhiều nhất trong nửa sau, do phải điều tra benchmark và soak bằng thí nghiệm đối chứng.
 - **Cách đã tiết kiệm token:** chạy test/evidence bằng script và chỉ đọc dòng tóm tắt (`grep FAIL`, `tail -1`); kiểm
   bản chơi bằng script đọc trạng thái thay vì chụp nhiều ảnh; gom kiểm tra vào một lần gọi; sửa file bằng diff
   nhỏ thay vì viết lại; chỉ đọc lại file khi nó đã đổi trên đĩa.
