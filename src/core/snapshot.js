@@ -25,9 +25,13 @@ export function snapshotLine(g) {
       dash_cd_s: S(p.dashCd),
       pulse_cd_s: S(p.pulseCd),
       charm_s: S(p.charm),
+      capacity: g.capacity, // v1.2
     },
-    lanterns: g.lanterns.map((l) => ({ id: l.id, pos: P(l.x, l.y, l.z), lit: l.lit, deposited: l.deposited })),
-    shades: g.shades.map((s) => ({ id: s.id, pos: P(s.x, s.y, s.z), state: s.state })),
+    lanterns: g.lanterns.map((l) => ({
+      id: l.id, pos: P(l.x, l.y, l.z), lit: l.lit, deposited: l.deposited,
+      fuel: g.fuelOut(l), ever_lit: l.everLit, relit_count: l.relitCount, // v1.2
+    })),
+    shades: g.shades.map((s) => ({ id: s.id, pos: P(s.x, s.y, s.z), state: s.state, target_lantern_id: s.targetId })),
     motes: g.motes.map((m) => ({
       id: m.id, pos: P(m.x, m.y, m.z), kind: m.kind, ttl_s: m.ttl == null ? null : S(m.ttl),
     })),

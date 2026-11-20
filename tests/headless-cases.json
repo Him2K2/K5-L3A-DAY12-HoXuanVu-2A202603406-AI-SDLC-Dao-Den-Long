@@ -17,7 +17,8 @@
       "name": "deposit-and-light", "night": 1, "ticks": 2, "ac": "AC1.6",
       "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [], "player": { "pos": [0, 0, 23.5], "carried": 10 } },
       "inputs": { "frames": [{ "tick": 0, "interact": true }] },
-      "expect": { "events": ["deposit", "lantern_lit"], "final": { "score": 200 } }
+      "_p3": "UPDATED: per_mote 10 -> 5, so 10 motes + first light = 50 + 100 = 150 (was 200).",
+      "expect": { "events": ["deposit", "lantern_lit"], "final": { "score": 150, "lanterns.0.fuel": 100, "player.capacity": 12 } }
     },
     {
       "name": "safe-zone-eject", "night": 1, "ticks": 90, "ac": "AC1.7",
@@ -54,11 +55,63 @@
       "expect": { "events": ["paused", "resumed"], "final": { "sim_tick": 20, "player.pos.2": 2.0 } }
     },
     {
-      "name": "win-all-lit", "night": 1, "ticks": 5, "ac": "AC1.13",
+      "name": "dawn-survived", "night": 1, "ticks": 40, "ac": "P3.13",
+      "_p3": "REPLACES 'win-all-lit': TICKET-03 removed the early win. Now: 3/5 lit at dawn => won dawn_survived.",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [], "time_left_s": 0.5,
+        "lanterns": [{ "id": "L1", "lit": true }, { "id": "L2", "lit": true }, { "id": "L3", "lit": true }] },
+      "expect": { "events": ["game_over"], "end_state": "won" }
+    },
+    {
+      "name": "dawn-too-few-lit", "night": 1, "ticks": 40, "ac": "P3.13",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [], "time_left_s": 0.5,
+        "lanterns": [{ "id": "L1", "lit": true }, { "id": "L2", "lit": true }] },
+      "expect": { "events": ["game_over"], "end_state": "lost" }
+    },
+    {
+      "name": "all-lit-no-early-win", "night": 1, "ticks": 120, "ac": "P3.12",
       "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [], "player": { "pos": [0, 0, 23.5], "carried": 10 },
         "lanterns": [{ "id": "L2", "lit": true }, { "id": "L3", "lit": true }, { "id": "L4", "lit": true }, { "id": "L5", "lit": true }] },
       "inputs": { "frames": [{ "tick": 0, "interact": true }] },
-      "expect": { "events": ["game_over"], "end_state": "won" }
+      "expect": { "events": ["lantern_lit"], "no_events": ["game_over"], "end_state": "playing" }
+    },
+    {
+      "name": "refuel", "night": 1, "ticks": 2, "ac": "P3.2",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [], "player": { "pos": [0, 0, 23.5], "carried": 7 },
+        "lanterns": [{ "id": "L1", "lit": true, "fuel": 55 }] },
+      "inputs": { "frames": [{ "tick": 0, "interact": true }] },
+      "expect": { "events": ["refuel"], "no_events": ["deposit"], "final": { "player.carried": 2, "score": 25 } }
+    },
+    {
+      "name": "lantern-out", "night": 1, "ticks": 5, "ac": "P3.4",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [], "lanterns": [{ "id": "L1", "lit": true, "fuel": 0.05 }] },
+      "expect": { "events": ["lantern_out"], "final": { "lanterns.0.lit": false, "lanterns.0.fuel": 0, "lanterns.0.ever_lit": true } }
+    },
+    {
+      "name": "relight", "night": 1, "ticks": 1, "ac": "P3.5",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [], "player": { "pos": [0, 0, 23.5], "carried": 5 },
+        "lanterns": [{ "id": "L1", "ever_lit": true }] },
+      "inputs": { "frames": [{ "tick": 0, "interact": true }] },
+      "expect": { "events": ["deposit", "lantern_lit"], "final": { "lanterns.0.relit_count": 1, "score": 65, "player.capacity": 12 } }
+    },
+    {
+      "name": "shade-drain", "night": 1, "ticks": 130, "ac": "P3.7/P3.8",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "lanterns": [{ "id": "L1", "lit": true, "fuel": 25 }],
+        "shades": [{ "id": "S1", "pos": [0, 1, 30] }] },
+      "expect": { "events": ["fuel_drain"], "final": { "shades.0.state": "drain", "shades.0.target_lantern_id": "L1" } }
+    },
+    {
+      "name": "drain-pulse-bonus", "night": 1, "ticks": 1, "ac": "P3.9/P3.16",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "player": { "pos": [0, 0, 22], "carried": 3 },
+        "lanterns": [{ "id": "L1", "lit": true, "fuel": 25 }], "shades": [{ "id": "S1", "pos": [0, 1, 26.5], "state": "drain", "target_lantern_id": "L1" }] },
+      "inputs": { "frames": [{ "tick": 0, "pulse": true }] },
+      "expect": { "events": ["pulse"], "final": { "score": 15, "shades.0.state": "stunned" } }
+    },
+    {
+      "name": "refuel-ejects-shade", "night": 1, "ticks": 60, "ac": "P3.10",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "player": { "pos": [0, 0, 23.5], "carried": 10 },
+        "lanterns": [{ "id": "L1", "lit": true, "fuel": 25 }], "shades": [{ "id": "S1", "pos": [0.5, 1, 23.5], "state": "chase" }] },
+      "inputs": { "frames": [{ "tick": 0, "interact": true }] },
+      "expect": { "events": ["refuel"], "no_events": ["player_hit"] }
     },
     {
       "name": "n2-bridge-and-pad", "night": 2, "ticks": 120, "ac": "AC2.2",

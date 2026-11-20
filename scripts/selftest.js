@@ -145,15 +145,19 @@ test("AC1.5 motes: 20 distinct at start, +1 per 240 ticks at free points, cap 30
     c(n1, 1200) === 24 && c(n3, 2400) === 30 && c(n3, 2640) === 30) ||
     show([c(n1, 0), pts.size, c(n1, 240), c(n1, 960), c(n1, 1200), c(n3, 2400), c(n3, 2640)]);
 });
-test("AC1.6 deposit: r=2.0, min(carried, missing), progress kept, nearest then lower id; +10/mote +100/lantern", () => {
+// [P3 UPDATED] (1) per_mote 10 -> 5: expected scores 70 -> 35 and 130 -> 115.
+// (2) The old rule "lit lanterns are skipped" no longer exists — a lit lantern now accepts refuel.
+//     The "skip" case moved L1 from 1.0 m to 1.8 m so it now checks "nearest eligible wins" (L2 at
+//     1.5 m). Refuel selection itself is covered by P3.2/P3.3.
+test("AC1.6 deposit: r=2.0, min(carried, missing), progress kept, nearest then lower id; +5/mote +100/lantern", () => {
   const a = sim({ scenario: scen({ player: { pos: [0, 0, 23.5], carried: 7 } }), frames: [{ tick: 0, interact: true }], ticks: 2 });
   const b = sim({ scenario: scen({ player: { pos: [0, 0, 23.5], carried: 5 }, lanterns: [{ id: "L1", deposited: 7 }] }), frames: [{ tick: 0, interact: true }], ticks: 1 });
   const tie = sim({ scenario: scen({ player: { carried: 3 }, lanterns: [{ id: "L2", pos: [0, 0, -2] }, { id: "L1", pos: [0, 0, 2] }] }), frames: [{ tick: 0, interact: true }], ticks: 1 });
-  const skip = sim({ scenario: scen({ player: { carried: 3 }, lanterns: [{ id: "L1", pos: [0, 0, 1], lit: true }, { id: "L2", pos: [0, 0, -1.5] }] }), frames: [{ tick: 0, interact: true }], ticks: 1 });
+  const skip = sim({ scenario: scen({ player: { carried: 3 }, lanterns: [{ id: "L1", pos: [0, 0, 1.8], lit: true }, { id: "L2", pos: [0, 0, -1.5] }] }), frames: [{ tick: 0, interact: true }], ticks: 1 });
   const far = sim({ scenario: scen({ player: { pos: [0, 0, 22.9], carried: 3 } }), frames: [{ tick: 0, interact: true }], ticks: 1 });
   const da = a.ev("deposit")[0], db = b.ev("deposit")[0];
-  return (da.data.amount === 7 && da.data.deposited === 7 && a.snaps[2].score === 70 &&
-    db.data.amount === 3 && b.ev("lantern_lit").length === 1 && b.snaps[1].player.carried === 2 && b.snaps[1].score === 130 &&
+  return (da.data.amount === 7 && da.data.deposited === 7 && a.snaps[2].score === 35 &&
+    db.data.amount === 3 && b.ev("lantern_lit").length === 1 && b.snaps[1].player.carried === 2 && b.snaps[1].score === 115 &&
     tie.ev("deposit")[0].data.lantern_id === "L1" && skip.ev("deposit")[0].data.lantern_id === "L2" &&
     far.ev("deposit").length === 0) || show([da, db, tie.events, skip.events]);
 });
@@ -246,26 +250,27 @@ test("AC1.12 fall (Y<-10): once, ignores invuln, loses all motes, waits 60, resp
     show(after.player.pos) === "[0,0,0]" && after.player.invuln === 1.5 &&
     dead.ev("game_over")[0]?.data.reason === "no_flames") || show({ falls, after: after?.player, dead: dead.ev("game_over") });
 });
-test("AC1.13 judge order: no_flames before all_lit; all_lit beats dawn on the same tick", () => {
+// [P3 UPDATED] TICKET-03 removed the early win: reason "all_lit" no longer exists. Case b now checks
+// that 5/5 lit at the dawn tick gives "dawn_survived"; cases a (no_flames first) and c (dawn) unchanged.
+test("AC1.13 judge order: no_flames first; at dawn enough lit => dawn_survived, else dawn", () => {
   const allLit = ["L1", "L2", "L3", "L4", "L5"].map((id) => ({ id, lit: true }));
   const a = sim({ scenario: scen({ player: { flames: 0 }, lanterns: allLit }), ticks: 5 });
   const b = sim({ scenario: scen({ lanterns: allLit.slice(1), player: { pos: [0, 0, 23.5], carried: 10 }, time_left_s: 1 / 60 }), frames: [{ tick: 0, interact: true }], ticks: 5 });
   const c = sim({ scenario: scen({ time_left_s: 0.5 }), ticks: 100 });
   const g = (r) => r.ev("game_over")[0];
-  return (g(a).data.reason === "no_flames" && g(b).data.reason === "all_lit" && g(c).data.reason === "dawn" && g(c).tick === 30) ||
+  return (g(a).data.reason === "no_flames" && g(b).data.reason === "dawn_survived" && g(b).tick === 1 &&
+    g(c).data.reason === "dawn" && g(c).tick === 30) ||
     show([g(a), g(b), g(c)]);
 });
-test("AC1.14 win score: 10/mote + 100/lantern + floor(sec left)x2 + 50/flame", () => {
-  const lit = ["L2", "L3", "L4", "L5"].map((id) => ({ id, lit: true }));
-  const r = sim({ scenario: scen({ lanterns: lit, player: { pos: [0, 0, 23.5], carried: 10, flames: 2 }, time_left_s: 100 }), frames: [{ tick: 0, interact: true }], ticks: 3 });
-  // 100 (10 motes) + 100 (lantern) + floor(99.983)*2=198 + 2*50=100
-  return r.snaps.at(-1).score === 498 || show(r.snaps.at(-1));
-});
+// [P3 REMOVED] AC1.14 "win score: 10/mote + 100/lantern + floor(sec left)x2 + 50/flame" was deleted:
+// TICKET-03 replaces the whole score formula (time bonus dropped, early win dropped). Its successor
+// is P3.17 below, which checks the new dawn bonus.
+// [P3 UPDATED] Night 1 now lasts 240 s (was 300 s): expected time_left_s changed accordingly.
 test("AC1.15 pause: tick advances, sim_tick/time/cooldowns/movement freeze; paused/resumed events", () => {
   const r = sim({ scenario: scen({ player: { pulse_cd_ticks: 100 } }), frames: [{ tick: 0, move: [0, 1] }, { tick: 10, pause: true }, { tick: 11, pause: false }, { tick: 20, pause: true }, { tick: 21, pause: false }], ticks: 25 });
   const s15 = r.snaps[15], s11 = r.snaps[11], s21 = r.snaps[21];
   return (r.ev("paused")[0].tick === 11 && r.ev("resumed")[0].tick === 21 && s15.state === "paused" && s15.sim_tick === 10 &&
-    near(s15.time_left_s, 300 - 10 / 60, 1e-3) && near(s15.player.pos[2], 1.0) && s11.player.pulse_cd_s === s15.player.pulse_cd_s &&
+    near(s15.time_left_s, 240 - 10 / 60, 1e-3) && near(s15.player.pos[2], 1.0) && s11.player.pulse_cd_s === s15.player.pulse_cd_s &&
     s21.sim_tick === 11 && s21.state === "playing" && near(s21.player.pos[2], 1.1)) || show({ s11: s11.player, s15, s21: s21.player });
 });
 
@@ -381,8 +386,9 @@ test("AC4.4 scenario accepts player.{invuln,dash_cd,pulse_cd,charm}_ticks and sh
   return (p.invuln === 0.5 && p.dash_cd_s === 1 && p.pulse_cd_s === 1.5 && p.charm_s === 2 &&
     shade(s.snaps[4], "S7").state === "stunned" && shade(s.snaps[5], "S7").state !== "stunned") || show([p, s.snaps[5].shades]);
 });
-test("AC4.5 shade states only from {spawning, wander, chase, recoil, stunned}", () => {
-  const ok = new Set(["spawning", "wander", "chase", "recoil", "stunned"]);
+// [P3 UPDATED] "drain" is a legal shade state since Contract v1.2.
+test("AC4.5 shade states only from {spawning, wander, chase, recoil, stunned, drain}", () => {
+  const ok = new Set(["spawning", "wander", "chase", "recoil", "stunned", "drain"]);
   const seen = new Set();
   for (const night of [1, 2, 3]) {
     const r = sim({ night, seed: 3, frames: [{ tick: 0, move: [0.3, 1] }], ticks: 6000 });
@@ -392,7 +398,7 @@ test("AC4.5 shade states only from {spawning, wander, chase, recoil, stunned}", 
   const hit = sim({ scenario: scen({ player: { carried: 7 }, shades: [{ id: "S1", pos: [0.5, 1, 0] }] }), frames: [{ tick: 30, pulse: true }], ticks: 40 });
   for (const sn of hit.snaps) for (const s of sn.shades) seen.add(s.state);
   const bad = [...seen].filter((x) => !ok.has(x));
-  return (bad.length === 0 && seen.size === 5) || show([...seen]);
+  return (bad.length === 0 && seen.size >= 5) || show([...seen]);
 });
 test("AC4.6 a full night (21 600 ticks) runs headless in <= 30 s", () => {
   const out = path.join(tmp, "perf.jsonl");
@@ -401,6 +407,131 @@ test("AC4.6 a full night (21 600 ticks) runs headless in <= 30 s", () => {
   const ms = Date.now() - t0;
   console.log(`        (night 3, snapshot every tick: ${ms} ms)`);
   return (code === 0 && ms <= 30000) || `code=${code} ms=${ms}`;
+});
+
+console.log("— Phase 3: TICKET-03 (Contract v1.2) —");
+
+const L1AT = [0, 0, 23.5]; // 1.5 m from L1 (0,0,25): within interact radius
+const lan = (snap, id = "L1") => snap.lanterns.find((l) => l.id === id);
+
+test("P3.1 lighting sets fuel 100; lit lanterns lose exactly 1.0 fuel per second", () => {
+  const r = sim({ scenario: scen({ player: { pos: L1AT, carried: 10 } }), frames: [{ tick: 0, interact: true }], ticks: 61 });
+  return (lan(r.snaps[1]).fuel === 100 && lan(r.snaps[61]).fuel === 99 && lan(r.snaps[0]).fuel === 0) ||
+    show([lan(r.snaps[1]), lan(r.snaps[61])]);
+});
+test("P3.2 refuel: used = min(carried, ceil((100-fuel)/10)), fuel capped at 100, +5 per mote, event refuel", () => {
+  const run = (fuel, carried) => sim({ scenario: scen({ player: { pos: L1AT, carried }, lanterns: [{ id: "L1", lit: true, fuel }] }), frames: [{ tick: 0, interact: true }], ticks: 1 });
+  const a = run(55, 7), b = run(95, 3), c = run(20, 2);
+  const e = (r) => r.ev("refuel")[0]?.data;
+  // a: 54.983 -> need 5 -> 100.0, 2 left; b: need 1 -> 100.0; c: only 2 carried -> 19.983 + 20 = 39.983 -> 40.0
+  return (show(e(a)) === '{"lantern_id":"L1","amount":5,"fuel":100}' && a.snaps[1].player.carried === 2 && a.snaps[1].score === 25 &&
+    e(b).amount === 1 && e(b).fuel === 100 && e(c).amount === 2 && e(c).fuel === 40 && c.snaps[1].player.carried === 0 &&
+    a.ev("deposit").length === 0) || show([e(a), e(b), e(c)]);
+});
+test("P3.3 selection among eligible lanterns (unlit, or lit & not full): nearest, tie -> lower id", () => {
+  // L1 lit (refuel) at 1.0 m vs L2 unlit at 1.5 m -> refuel L1.
+  const a = sim({ scenario: scen({ player: { carried: 3 }, lanterns: [{ id: "L1", pos: [0, 0, 1], lit: true, fuel: 50 }, { id: "L2", pos: [0, 0, -1.5] }] }), frames: [{ tick: 0, interact: true }], ticks: 1 });
+  // Tie at 1.5 m between lit L3 (refuel) and unlit L2 -> L2 (lower id).
+  const b = sim({ scenario: scen({ player: { carried: 3 }, lanterns: [{ id: "L3", pos: [0, 0, 1.5], lit: true, fuel: 50 }, { id: "L2", pos: [0, 0, -1.5] }] }), frames: [{ tick: 0, interact: true }], ticks: 1 });
+  return (a.ev("refuel")[0]?.data.lantern_id === "L1" && b.ev("deposit")[0]?.data.lantern_id === "L2") || show([a.events, b.events]);
+});
+test("P3.4 fuel <= 0 -> goes out right after step 2: lantern_out, deposited 0, ever_lit, fuel 0", () => {
+  const r = sim({ scenario: scen({ lanterns: [{ id: "L1", lit: true, fuel: 0.05 }] }), ticks: 4 }); // 3 units
+  const out = r.ev("lantern_out");
+  const l3 = lan(r.snaps[3]);
+  return (out.length === 1 && out[0].tick === 3 && lan(r.snaps[2]).lit && !l3.lit && l3.fuel === 0 && l3.deposited === 0 && l3.ever_lit) ||
+    show({ out, l2: lan(r.snaps[2]), l3 });
+});
+test("P3.5 relight costs 5 (ever_lit), +40, relight:true, relit_count+1; never-lit still costs 10", () => {
+  const a = sim({ scenario: scen({ player: { pos: L1AT, carried: 5 }, lanterns: [{ id: "L1", ever_lit: true }] }), frames: [{ tick: 0, interact: true }], ticks: 1 });
+  const b = sim({ scenario: scen({ player: { pos: L1AT, carried: 5 } }), frames: [{ tick: 0, interact: true }], ticks: 1 });
+  const lit = a.ev("lantern_lit")[0];
+  return (lit?.data.relight === true && lan(a.snaps[1]).relit_count === 1 && lan(a.snaps[1]).fuel === 100 && a.snaps[1].score === 25 + 40 &&
+    b.ev("lantern_lit").length === 0 && lan(b.snaps[1]).deposited === 5) || show([a.events, lan(a.snaps[1]), b.events]);
+});
+test("P3.6 safe zone needs fuel >= 30: exactly 30 still blocks, 29.98 does not", () => {
+  const run = (fuel) => sim({ scenario: scen({ player: { pos: [0, 0, 25] }, lanterns: [{ id: "L1", lit: true, fuel }], shades: [{ id: "S1", pos: [0, 1, 31.05], state: "chase" }] }), ticks: 1 });
+  const at30 = run(30 + 1 / 60), below = run(30); // after tick-1 decay: exactly 30.0 vs 29.983
+  const d = (r) => dist2(shade(r.snaps[1], "S1").pos, [0, 0, 25]);
+  return (near(d(at30), 6, 1e-3) && near(d(below), 6.05 - 4 / 60, 1e-3)) || show([d(at30), d(below)]);
+});
+test("P3.7 only wander shades seek the nearest weak lantern, drain within 2 m; 5/s each + 1/s decay, stacking", () => {
+  const r = sim({ scenario: scen({ lanterns: [{ id: "L1", lit: true, fuel: 25 }], shades: [{ id: "S1", pos: [0, 1, 30] }] }), ticks: 200 });
+  const startTick = r.snaps.findIndex((s) => shade(s, "S1").state === "drain");
+  const f0 = lan(r.snaps[startTick + 10]).fuel, f1 = lan(r.snaps[startTick + 70]).fuel; // 60 ticks of draining
+  const two = sim({ scenario: scen({ lanterns: [{ id: "L1", lit: true, fuel: 25 }], shades: [
+    { id: "S1", pos: [0, 1, 26.5], state: "drain", target_lantern_id: "L1" }, { id: "S2", pos: [1, 1, 26], state: "drain", target_lantern_id: "L1" }] }), ticks: 60 });
+  const chaser = sim({ scenario: scen({ player: { pos: [0, 0, 36] }, lanterns: [{ id: "L1", lit: true, fuel: 25 }], shades: [{ id: "S1", pos: [0, 1, 30], state: "chase" }] }), ticks: 30 });
+  return (startTick > 30 && startTick < 60 && near(f0 - f1, 6, 0.11) && near(lan(two.snaps[60]).fuel, 25 - 11, 0.11) &&
+    shade(chaser.snaps[30], "S1").state === "chase" && shade(chaser.snaps[30], "S1").pos[2] > 30) ||
+    show({ startTick, f0, f1, two: lan(two.snaps[60]).fuel, chaser: shade(chaser.snaps[30], "S1") });
+});
+test("P3.8 fuel_drain event every 60 ticks of draining, with the fuel left", () => {
+  const r = sim({ scenario: scen({ lanterns: [{ id: "L1", lit: true, fuel: 25 }], shades: [{ id: "S1", pos: [0, 1, 26.5], state: "drain", target_lantern_id: "L1" }] }), ticks: 125 });
+  const ev = r.ev("fuel_drain");
+  // 25 - 60*(1+5)/60 = 19.0 at tick 60; 13.0 at tick 120
+  return (show(ev.map((e) => [e.tick, e.data.fuel])) === "[[60,19],[120,13]]" && ev[0].data.shade_id === "S1" && ev[0].data.lantern_id === "L1") || show(ev);
+});
+test("P3.9 drain exits: Mây within 6 m -> chase; lantern out -> wander; stun -> +15 and ends in wander", () => {
+  const near6 = sim({ scenario: scen({ player: { pos: [0, 0, 21] }, lanterns: [{ id: "L1", lit: true, fuel: 25 }], shades: [{ id: "S1", pos: [0, 1, 26.5], state: "drain", target_lantern_id: "L1" }] }), ticks: 1 });
+  const out = sim({ scenario: scen({ lanterns: [{ id: "L1", lit: true, fuel: 0.05 }], shades: [{ id: "S1", pos: [0, 1, 26.5], state: "drain", target_lantern_id: "L1" }] }), ticks: 1 });
+  const stun = sim({ scenario: scen({ player: { pos: [0, 0, 22], carried: 3 }, lanterns: [{ id: "L1", lit: true, fuel: 25 }], shades: [{ id: "S1", pos: [0, 1, 26.5], state: "drain", target_lantern_id: "L1" }] }), frames: [{ tick: 0, pulse: true }], ticks: 1 });
+  // Stun ending at 15 m from Mây: Phase-2 rule would give "chase" (<= 18 m); TICKET-03 says "wander".
+  const end = sim({ scenario: scen({ shades: [{ id: "S1", pos: [15, 1, 0], state: "stunned", state_ticks_left: 1 }] }), ticks: 1 });
+  return (shade(near6.snaps[1], "S1").state === "chase" && out.ev("lantern_out").length === 1 && shade(out.snaps[1], "S1").state === "wander" &&
+    stun.snaps[1].score === 15 && shade(stun.snaps[1], "S1").state === "stunned" && shade(end.snaps[1], "S1").state === "wander") ||
+    show([near6.snaps[1].shades, out.snaps[1].shades, stun.snaps[1].score, end.snaps[1].shades]);
+});
+test("P3.10 refuel back to >= 30 with a shade inside 6 m: pushed to the edge within 30 ticks, harmless", () => {
+  const r = sim({ scenario: scen({ player: { pos: L1AT, carried: 10 }, lanterns: [{ id: "L1", lit: true, fuel: 25 }], shades: [{ id: "S1", pos: [0.5, 1, 23.5], state: "chase" }] }),
+    frames: [{ tick: 0, interact: true }], ticks: 60 });
+  const d30 = dist2(shade(r.snaps[30], "S1").pos, [0, 0, 25]);
+  return (r.ev("refuel").length === 1 && r.ev("player_hit").length === 0 && near(d30, 6, RND)) || show({ d30, ev: r.events });
+});
+test("P3.11 night lengths 240 / 270 / 300 s", () => {
+  const t = [1, 2, 3].map((night) => sim({ night, scenario: scen(), ticks: 0 }).snaps[0].time_left_s);
+  return show(t) === "[240,270,300]" || show(t);
+});
+test("P3.12 lighting every lantern does NOT end the night", () => {
+  const lit = ["L2", "L3", "L4", "L5"].map((id) => ({ id, lit: true }));
+  const r = sim({ scenario: scen({ lanterns: lit, player: { pos: L1AT, carried: 10 } }), frames: [{ tick: 0, interact: true }], ticks: 120 });
+  return (r.snaps[1].lanterns.every((l) => l.lit) && r.ev("game_over").length === 0 && r.snaps[120].state === "playing") || show(r.events);
+});
+test("P3.13 dawn: alive and lit >= ceil(0.6 x total) (3/5, 4/6, 5/7) => won dawn_survived, else lost dawn", () => {
+  const ids = ["L1", "L2", "L3", "L4", "L5", "L6", "L7"];
+  const run = (night, k) => sim({ night, scenario: scen({ lanterns: ids.slice(0, k).map((id) => ({ id, lit: true })), time_left_s: 0.5 }), ticks: 40 }).ev("game_over")[0]?.data.reason;
+  const got = [run(1, 3), run(1, 2), run(2, 4), run(2, 3), run(3, 5), run(3, 4)];
+  return show(got) === show(["dawn_survived", "dawn", "dawn_survived", "dawn", "dawn_survived", "dawn"]) || show(got);
+});
+test("P3.14 running out of flames on the dawn tick still loses with no_flames", () => {
+  const r = sim({ scenario: scen({ player: { flames: 1 }, lanterns: ["L1", "L2", "L3"].map((id) => ({ id, lit: true })), shades: [{ id: "S1", pos: [0.5, 1, 0], state: "chase" }], time_left_s: 1 / 60 }), ticks: 3 });
+  const g = r.ev("game_over")[0];
+  return (g.tick === 1 && g.data.result === "lost" && g.data.reason === "no_flames") || show(g);
+});
+test("P3.15 capacity = min(20, 10 + 2 x successful_lights); relights count, preset lanterns don't", () => {
+  const a = sim({ scenario: scen({ player: { pos: L1AT, carried: 10 } }), frames: [{ tick: 0, interact: true }], ticks: 1 });
+  const relit = sim({ scenario: scen({ player: { pos: L1AT, carried: 5 }, lanterns: [{ id: "L1", ever_lit: true }] }), frames: [{ tick: 0, interact: true }], ticks: 1 });
+  const preset = sim({ scenario: scen({ lanterns: [{ id: "L1", lit: true }, { id: "L2", lit: true }] }), ticks: 0 });
+  const cap = (n) => sim({ scenario: scen({ player: { successful_lights: n } }), ticks: 0 }).snaps[0].player.capacity;
+  const pick = sim({ scenario: scen({ player: { successful_lights: 1, carried: 11 }, motes: [[0, 0, 0.5], [0.5, 0, 0]] }), ticks: 1 });
+  return (a.snaps[0].player.capacity === 10 && a.snaps[1].player.capacity === 12 && relit.snaps[1].player.capacity === 12 &&
+    preset.snaps[0].player.capacity === 10 && cap(5) === 20 && cap(9) === 20 && pick.snaps[1].player.carried === 12) ||
+    show([a.snaps[1].player.capacity, relit.snaps[1].player.capacity, cap(5), cap(9), pick.snaps[1].player.carried]);
+});
+test("P3.17 dawn bonus: each lit lantern 50 + floor(fuel), each flame 50; no time bonus", () => {
+  const lit = ["L2", "L3", "L4", "L5"].map((id) => ({ id, lit: true, fuel: 50 }));
+  const r = sim({ scenario: scen({ lanterns: lit, player: { pos: L1AT, carried: 10, flames: 2 }, time_left_s: 1 }), frames: [{ tick: 0, interact: true }], ticks: 70 });
+  // deposit 10x5=50, first light 100; at dawn (tick 60): L1 fuel 99.02 -> 50+99, L2-L5 fuel 49.0 -> 4x(50+49), flames 2x50
+  const want = 50 + 100 + (50 + 99) + 4 * (50 + 49) + 2 * 50;
+  const over = r.ev("game_over")[0];
+  return (over?.tick === 60 && over.data.reason === "dawn_survived" && r.snaps.at(-1).score === want) || show({ over, score: r.snaps.at(-1).score, want });
+});
+test("P3.22/23 snapshot + scenario v1.2 fields (fuel 1 dp, ever_lit, relit_count, capacity, target_lantern_id)", () => {
+  const s = sim({ scenario: scen({ lanterns: [{ id: "L1", lit: true }, { id: "L2", lit: true, fuel: 12.34 }, { id: "L3", ever_lit: true, relit_count: 2 }],
+    shades: [{ id: "S1", pos: [0, 1, 26.5], state: "drain", target_lantern_id: "L1" }] }), ticks: 0 }).snaps[0];
+  const [l1, l2, l3] = s.lanterns;
+  return (l1.fuel === 100 && l1.ever_lit && l2.fuel === 12.3 && !l3.lit && l3.fuel === 0 && l3.ever_lit && l3.relit_count === 2 &&
+    s.player.capacity === 10 && s.shades[0].state === "drain" && s.shades[0].target_lantern_id === "L1") || show([l1, l2, l3, s.shades[0]]);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

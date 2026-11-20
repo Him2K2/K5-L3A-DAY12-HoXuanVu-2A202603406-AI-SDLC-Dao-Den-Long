@@ -13,7 +13,7 @@ export const DEFAULT_TUNING = {
   interact_radius: 2.0,
   pulse_cost: 3,
   pulse_radius: 5.0,
-  night1_duration_s: 300,
+  night1_duration_s: 240,
   flames: 3,
   invuln_s: 1.5,
   hit_drop_ratio: 0.5,
@@ -27,14 +27,27 @@ export const DEFAULT_TUNING = {
   dash_speed: 14.0,
   dash_duration_s: 0.2,
   dash_cooldown_s: 1.5,
-  night2_duration_s: 330,
-  night3_duration_s: 360,
+  night2_duration_s: 270,
+  night3_duration_s: 300,
+  // TICKET-03 (Contract v1.2)
+  fuel_max: 100,
+  fuel_decay_per_s: 1.0,
+  fuel_per_mote: 10,
+  relight_cost: 5,
+  win_ratio: 0.6,
+  drain_per_s: 5,
+  low_fuel_threshold: 30,
+  capacity_max: 20,
   score: {
-    per_mote: 10, // per mote DEPOSITED
-    per_lantern: 100,
+    per_mote: 5, // per mote put into a lantern (light, relight or refuel)
+    per_lantern: 100, // first light
     per_stun: 5, // per shade hit by a pulse
-    per_second_left: 2,
+    per_second_left: 0, // time bonus removed in TICKET-03
     per_flame_left: 50,
+    // extra keys (not in the contract template) documenting the rest of the v1.2 formula
+    per_relight: 40,
+    per_stun_draining: 15, // total for a shade that was draining when hit
+    per_lit_lantern_at_dawn: 50, // + floor(fuel) each
   },
 };
 
@@ -89,6 +102,12 @@ export const R = {
   WIND_LEN: 300,
   WIND_WARN: 120,
   WIND_SPEED: 2.0,
+  // TICKET-03: fuel is stored as integer units of 1/60 (FUEL_U per fuel point).
+  FUEL_U: 60,
+  CAPACITY_STEP: 2,
+  DRAIN_RANGE: 2, // wander shade within 2 m of its weak lantern starts draining
+  DRAIN_ALERT: 6, // draining shade switches to chase when Mây is within 6 m
+  DRAIN_EVENT_EVERY: 60,
 };
 
 export function cloneTuning(t = DEFAULT_TUNING) {

@@ -1,4 +1,4 @@
-// Regenerate evidence/phase2/ from scratch through the real headless CLI.
+// Regenerate evidence/<PHASE>/ (default phase3) from scratch through the real headless CLI.
 // Run: node scripts/gen-evidence.js   (exit 0 = every case met its expectation)
 import fs from "node:fs";
 import path from "node:path";
@@ -7,7 +7,8 @@ import { execFileSync } from "node:child_process";
 
 const root = path.dirname(path.dirname(url.fileURLToPath(import.meta.url)));
 const RUN = path.join(root, "src/headless/run.js");
-const ev = path.join(root, "evidence", "phase2");
+const PHASE = process.env.PHASE || "phase3";
+const ev = path.join(root, "evidence", PHASE);
 const work = path.join(ev, "cases");
 fs.rmSync(ev, { recursive: true, force: true });
 fs.mkdirSync(work, { recursive: true });
@@ -62,7 +63,7 @@ for (const n of [1, 2, 3]) {
   fs.rmSync(path.join(work, `perf-${n}.jsonl`));
 }
 
-const md = `# Evidence Phase 2 (Contract v1.1)
+const md = `# Evidence ${PHASE} (Contract v${JSON.parse(fs.readFileSync(path.join(root, "game.contract.json"), "utf8")).contract_version})
 
 Sinh tự động bằng \`node scripts/gen-evidence.js\` qua CLI headless thật (\`src/headless/run.js\`).
 Mỗi case: scenario + inputs nằm trong \`tests/headless-cases.json\`; bản sao file đã chạy ở \`cases/\`; output JSONL ở thư mục này.
@@ -87,7 +88,7 @@ ${det.join("\n")}
 |-----|--------|-----------|--|
 ${perf.join("\n")}
 
-Bộ test chi tiết (37 test, một test cho mỗi AC + regression Phase 1): xem \`selftest.txt\`.
+Bộ test chi tiết (mỗi AC một test + regression các phase trước): xem \`selftest.txt\`.
 `;
 fs.writeFileSync(path.join(ev, "SUMMARY.md"), md);
 console.log(md);
