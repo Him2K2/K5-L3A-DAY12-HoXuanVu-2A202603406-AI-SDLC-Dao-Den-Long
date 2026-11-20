@@ -31,6 +31,7 @@ function parseArgs(argv) {
     }
   }
   if (a.out == null) throw new UsageError("--out is required");
+  if (![1, 2, 3].includes(a.night)) throw new UsageError("--night must be 1, 2 or 3");
   if (a.ticks < 0) throw new UsageError("--ticks must be >= 0");
   if (a.snapshotEvery < 1) throw new UsageError("--snapshot-every must be >= 1");
   return a;
@@ -72,20 +73,21 @@ function main() {
   const inputData = a.inputs ? readJson(a.inputs, "inputs") : null;
   track = new InputTrack(inputData); // throws BadInput on malformed frames
 
-  const game = new Game({ seed: a.seed, scenario });
+  const game = new Game({ seed: a.seed, night: a.night, scenario });
 
   const lines = [];
   const push = (obj) => lines.push(JSON.stringify(obj));
 
   // Snapshot of tick 0: state after scenario build, before any input.
   push(snapshotLine(game));
+  push(eventLine(0, { name: "night_start", data: { night: a.night } }));
 
   for (let k = 0; k < a.ticks; k++) {
     const input = track.resolve(k);
     const events = game.step(input);
     for (const ev of events) push(eventLine(game.tick, ev)); // events in step k => tick k+1
     if (game.tick % a.snapshotEvery === 0) push(snapshotLine(game));
-    if (game.state !== "playing") break;
+    if (game.state === "won" || game.state === "lost") break;
   }
 
   push(endLine(game)); // required final line

@@ -27,7 +27,7 @@ export class InputTrack {
         if (f.cam_yaw_deg !== undefined && !Number.isFinite(f.cam_yaw_deg)) {
           throw new BadInput("inputs: cam_yaw_deg must be a number");
         }
-        for (const b of ["jump", "interact", "pulse", "dash"]) {
+        for (const b of ["jump", "interact", "pulse", "dash", "pause"]) {
           if (f[b] !== undefined && typeof f[b] !== "boolean") {
             throw new BadInput(`inputs: ${b} must be boolean`);
           }
@@ -39,20 +39,20 @@ export class InputTrack {
     // Defaults before the first frame (contract C).
     this.held = {
       move: [0, 0], camYaw: 0,
-      jump: false, interact: false, pulse: false, dash: false,
+      jump: false, interact: false, pulse: false, dash: false, pause: false,
     };
   }
 
   resolve(tick) {
     const prev = {
       jump: this.held.jump, interact: this.held.interact,
-      pulse: this.held.pulse, dash: this.held.dash,
+      pulse: this.held.pulse, dash: this.held.dash, pause: this.held.pause,
     };
     while (this.ptr < this.frames.length && this.frames[this.ptr].tick === tick) {
       const f = this.frames[this.ptr++];
       if (f.move !== undefined) this.held.move = [f.move[0], f.move[1]];
       if (f.cam_yaw_deg !== undefined) this.held.camYaw = f.cam_yaw_deg;
-      for (const b of ["jump", "interact", "pulse", "dash"]) {
+      for (const b of ["jump", "interact", "pulse", "dash", "pause"]) {
         if (f[b] !== undefined) this.held[b] = f[b];
       }
     }
@@ -63,6 +63,7 @@ export class InputTrack {
       interact: this.held.interact && !prev.interact,
       pulse: this.held.pulse && !prev.pulse,
       dash: this.held.dash && !prev.dash,
+      pause: this.held.pause && !prev.pause,
     };
   }
 }
