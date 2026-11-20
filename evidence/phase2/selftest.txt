@@ -1,0 +1,45 @@
+— Regression (Phase 1 contract) —
+  PASS  R1 determinism: same seed => identical bytes (all 3 nights)
+  PASS  R2 different seed => different output
+  PASS  R3 exit 2 on malformed inputs / scenario; exit 1 on bad --night
+  PASS  R4 tick model: event from input tick k is logged at tick k+1; end line last
+  PASS  R5 building a scenario emits no gameplay events and scores nothing
+— A. Standard numbers & tick order —
+  PASS  AC1.1 run 6.0 m/s instantly; camera yaw rotates input
+  PASS  AC1.2 jump 7 m/s, g=-20, only when grounded; lands at y=0
+  PASS  AC1.3 dash 14 m/s x 12 ticks = 2.8 m; cooldown 90 ticks from start; air dash holds height
+  PASS  AC1.4 pickup XZ<=1.0 and height gap<=1.5; capacity 10
+  PASS  AC1.5 motes: 20 distinct at start, +1 per 240 ticks at free points, cap 30
+  PASS  AC1.6 deposit: r=2.0, min(carried, missing), progress kept, nearest then lower id; +10/mote +100/lantern
+  PASS  AC1.7 safe zone 6 m on lit lanterns only; shade inside when lit is ejected within 30 ticks, harmless
+  PASS  AC1.8 pulse: needs 3 motes, 3D <=5 m from feet+0.8, stun 120, push 4 m over 15 ticks, +5 each
+  PASS  AC1.8b pulse again refreshes stun (and costs 3 more)
+  PASS  AC1.9 shades: detect 12, give up 18, hit XZ<=1 & dy<=1.5, recoil 2 m / 60 ticks, 1 hit per tick by id
+  PASS  AC1.9b invulnerable 90 ticks after a hit; touching while invulnerable does nothing
+  PASS  AC1.10 spawn schedule: 2 at tick 300, then every 480 (N1) / 420 (N2), max 6/8, >=15 m from player
+  PASS  AC1.11 hit: drop floor(carried/2) on a 1.5-2.5 m ring, TTL 480 ticks, pickable
+  PASS  AC1.12 fall (Y<-10): once, ignores invuln, loses all motes, waits 60, respawns at start with invuln 90
+  PASS  AC1.13 judge order: no_flames before all_lit; all_lit beats dawn on the same tick
+  PASS  AC1.14 win score: 10/mote + 100/lantern + floor(sec left)x2 + 50/flame
+  PASS  AC1.15 pause: tick advances, sim_tick/time/cooldowns/movement freeze; paused/resumed events
+— B. Maps —
+  PASS  AC2.1 Night 1 lanterns at ticket coordinates; island radius 40
+  PASS  AC2.2 Night 2: bridge walkable, no rails; jump pad flies ~1.4 s to the other island
+  PASS  AC2.3 Night 3: tier walls block, ramp climbs to Y=3, pad lands on tier 2, bell tower blocks
+  PASS  AC2.4 Night 3 wind: every 30 s for 5 s at 2 m/s, seeded direction; off when wind_enabled=false
+— C. New features —
+  PASS  AC3.1 drifters spawn at 1200, 2400…, max 2 alive, ids D1, D2 (nights 2-3 only)
+  PASS  AC3.2 drifter idle -> chase when carrying >=5 within 15 m; back to idle when lost
+  PASS  AC3.3 drifter touch steals min(3,carried) even when invulnerable; flees 240 ticks then removed
+  PASS  AC3.4 pulse: chasing drifter flees without stealing; fleeing drifter drops its loot, vanishes after 120
+  PASS  AC3.5 charm: 600 ticks, run 7.2 m/s, dash without cooldown, press during dash ignored, re-pick refreshes
+  PASS  AC3.6 charm respawns after 2700 ticks; standard positions per night
+— D. Contract v1.1 —
+  PASS  AC4.2 --night 1|2|3 selects 5/6/7 lanterns
+  PASS  AC4.3 snapshot carries every v1.1 field
+  PASS  AC4.4 scenario accepts player.{invuln,dash_cd,pulse_cd,charm}_ticks and shades[].state/state_ticks_left
+  PASS  AC4.5 shade states only from {spawning, wander, chase, recoil, stunned}
+        (night 3, snapshot every tick: 215 ms)
+  PASS  AC4.6 a full night (21 600 ticks) runs headless in <= 30 s
+
+37 passed, 0 failed

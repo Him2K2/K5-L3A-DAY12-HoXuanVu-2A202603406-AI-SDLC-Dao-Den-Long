@@ -2,39 +2,35 @@
 
 > **Video demo:** _(Phase 4 sẽ thêm link .mp4 tại đây)_
 
-Game 3D: bé **Mây** (đội nón lá có treo đèn lồng nhỏ) chạy quanh một hòn đảo giữa biển mây,
-thu thập **đom đóm (motes)** mang về **thắp 5 Đèn Lồng Lớn**, trong khi **Bóng Mực (shades)**
-rình trong sương. Thắp hết đèn thì **thắng**, hết mạng thì **thua**.
+Game 3D: bé **Mây** (đội nón lá, treo một chiếc đèn lồng nhỏ) chạy qua **ba hòn đảo** giữa biển mây,
+thu **đom đóm** để **thắp lại các Đèn Lồng Lớn** trước bình minh, né **Bóng Mực** và **Gió Lạc**.
 
-Kiến trúc cốt lõi: **một lõi mô phỏng tất định** (`src/core/`) được dùng chung cho cả
-bản chơi 3D (Three.js) lẫn chế độ **headless** để chấm tự động — thứ bạn thấy khi chơi
-chính là thứ được chấm.
+Kiến trúc: **một lõi mô phỏng tất định** (`src/core/`) dùng chung cho bản chơi 3D (Three.js) và
+chế độ **headless** để chấm tự động — thứ bạn thấy khi chơi chính là thứ được chấm.
+Hiện tuân thủ **Test Contract v1.1** (TICKET-02).
 
 ---
 
 ## Cài đặt & chạy (≤ 3 lệnh)
 
 ```bash
-npm install          # không có dependency runtime — lõi + headless chạy bằng Node thuần
-npm start            # mở http://localhost:8080 trong trình duyệt để chơi
+npm install     # không có dependency runtime
+npm start       # mở http://localhost:8080 để chơi
 ```
 
-Chạy **headless** (không cần GUI/GPU):
+Headless (không cần GUI/GPU/mạng):
 
 ```bash
-node src/headless/run.js --seed 1 --night 1 --ticks 600 --out run.jsonl
+node src/headless/run.js --seed 1 --night 2 --ticks 600 --out run.jsonl
 ```
 
-> Yêu cầu Node ≥ 18 (đã test trên Node 22). Chạy được trên macOS/Linux/Windows.
-> Bản chơi 3D tải Three.js qua CDN (cần mạng lần đầu); **chế độ headless không cần mạng,
-> không cần dependency, không cần GPU.**
-
-### Lệnh tiện ích
+> Node ≥ 18 (đã test Node 22). Chạy được trên macOS/Linux/Windows.
+> Bản chơi tải Three.js qua CDN (cần mạng lần đầu); headless thì không.
 
 ```bash
-npm run selftest     # chạy bộ test tất định + luật chơi + exit code (16 test)
-node scripts/check-contract.js   # kiểm tra game.contract.json khớp số trong code
-node scripts/gen-evidence.js     # sinh lại toàn bộ evidence/
+npm run selftest                 # 37 test: mỗi acceptance criterion + regression Phase 1
+node scripts/check-contract.js   # game.contract.json khớp số trong code
+node scripts/gen-evidence.js     # chạy mọi scenario headless → evidence/phase2/
 ```
 
 ---
@@ -43,80 +39,94 @@ node scripts/gen-evidence.js     # sinh lại toàn bộ evidence/
 
 | Phím | Hành động |
 |------|-----------|
-| `W A S D` | Di chuyển (theo hướng camera) |
-| Kéo chuột / `◀ ▶` | Xoay camera |
+| `W A S D` / `↑ ↓` | Chạy (theo hướng camera) |
+| Chuột (click để khoá chuột) / kéo / `◀ ▶` | Xoay camera |
 | `Space` | Nhảy |
-| `E` | Thắp đèn (nạp đom đóm khi đứng gần Đèn Lồng) |
-| `Shift` hoặc `Q` | Tỏa sáng (xua Bóng Mực) |
+| `Shift` | Lướt |
+| `E` | Nạp ánh sáng vào Đèn Lồng |
+| `Q` hoặc `F` | Tỏa Sáng (cần 3 đom đóm) |
+| `Esc` / `P` | Tạm dừng (Tiếp tục / Chơi lại Đêm / Cài đặt / Về menu) |
 
-## Cách tính điểm
+## Cách tính điểm (chuẩn TICKET-02)
 
 | Sự kiện | Điểm |
 |---------|------|
-| Nhặt 1 đom đóm (`per_mote`) | +2 |
-| Thắp 1 đèn (`per_lantern`) | +100 |
-| Mỗi Bóng Mực bị tỏa sáng làm choáng (`per_stun`) | +5 |
-| Mỗi giây còn lại khi **thắng** (`per_second_left`) | +1 |
-| Mỗi mạng còn lại khi **thắng** (`per_flame_left`) | +50 |
+| Mỗi đom đóm **nạp** vào đèn | +10 |
+| Mỗi đèn thắp | +100 |
+| Mỗi Bóng Mực trúng Tỏa Sáng (mỗi con mỗi lần) | +5 |
+| Khi **thắng** Đêm | + floor(giây còn lại) × 2 + 50 × Ngọn Lửa còn lại |
 
-Thua (hết mạng hoặc hết giờ) **không** được thưởng điểm kết thúc.
+**Tổng điểm game = tổng điểm các Đêm đã thắng.** (Headless: `score` là điểm của Đêm đang chạy.)
+
+## Ba Đêm
+
+| Đêm | Đảo | Đèn | Thời gian | Điểm mới |
+|-----|-----|-----|-----------|----------|
+| 1 | Đảo Bến — đảo tròn r = 40 m | 5 | 300 s | — |
+| 2 | Đảo Cau — 2 đảo + cầu tre, 2 bục nhảy | 6 | 330 s | Gió Lạc, Bùa Gió |
+| 3 | Đảo Chuông — 3 tầng, 2 dốc, tháp chuông | 7 | 360 s | Gió mạnh, Bóng nhanh hơn |
 
 ---
 
-## Test Contract v1.0 — chế độ headless
-
-File `game.contract.json` ở gốc repo khai đúng mọi số `tuning` mà game đang dùng
-(được `scripts/check-contract.js` canh để không lệch với code).
+## Test Contract v1.1 — headless
 
 ```
-node src/headless/run.js --seed <int> --night 1 [--scenario f.json] [--inputs f.json] \
+node src/headless/run.js --seed <int> --night 1|2|3 [--scenario f.json] [--inputs f.json] \
      --ticks <int> --out f.jsonl [--snapshot-every <int=10>]
 ```
 
-- Logic chạy **60 tick/giây cố định** (`DT = 1/60`), không cửa sổ, không GPU.
-- Kết thúc khi đủ `--ticks` hoặc khi thắng/thua; **exit 0**.
-- File inputs/scenario sai định dạng → **exit 2**; lỗi khác → exit ≠ 0, báo ra stderr.
-- Đơn vị mét; **trục Y hướng lên**; đất Y = 0; player xuất phát (0,0,0).
-- Output JSONL gồm `snapshot` / `event` / dòng `end` cuối; toạ độ làm tròn 3 chữ số.
-- **Tất định:** cùng seed + scenario + inputs → output **byte-identical** (xem
-  `evidence/determinism-run-a.jsonl` vs `-b.jsonl`).
+- 60 tick/giây cố định; thứ tự 12 bước trong một tick đúng như ticket (xem `src/core/game.js`).
+- Exit 0 khi chạy xong / thắng / thua; **exit 2** khi inputs/scenario sai định dạng; lỗi khác exit 1.
+- Snapshot có `night`, `wind`, `player.{vel, grounded, invuln, dash_cd_s, pulse_cd_s, charm_s}`,
+  mảng `motes` (`kind`, `ttl_s`), `drifters`, `charms`. Trạng thái Bóng Mực:
+  `spawning | wander | chase | recoil | stunned`.
+- **Tất định:** cùng seed + scenario + inputs → output byte-identical (đã kiểm cả 3 Đêm).
+- Một Đêm đầy đủ 21 600 tick chạy ~0.25 s (yêu cầu ≤ 30 s).
 
-Chi tiết quy ước tick, vị trí, và các giả định: xem [`docs/assumptions.md`](docs/assumptions.md).
+Giả định cho các chỗ ticket để mở: [`docs/assumptions.md`](docs/assumptions.md).
+Spec + acceptance criteria: [`docs/spec-phase2.md`](docs/spec-phase2.md).
 
 ---
 
 ## ✨ Sáng tạo của tôi
 
-Ngoài phần lõi PRD-0 yêu cầu, bản này thêm (đều **không** ảnh hưởng output headless theo contract):
+Đều nằm ở tầng hiển thị (`web/`) nên **không** đổi output headless:
 
-- **Đèn lồng là nơi trú ẩn:** Bóng Mực không bao giờ vào trong `safe_radius` quanh *mọi*
-  cột đèn — chạy về chân đèn là an toàn. (Là hành vi tất định, có thể test; xem giả định.)
-- **Kinh tế ánh sáng có đánh đổi:** đom đóm vừa để thắp đèn vừa là "nhiên liệu" khi tỏa
-  sáng (`pulse_cost`), nên người chơi phải cân nhắc tiêu hay để dành.
-- **Hiệu ứng ấm/tím:** đảo tối dần, đèn thắp lên toả sáng vàng cam ấm; Bóng Mực phát sắc
-  tím đen và **co lại + mờ đi khi bị choáng** (phản hồi thị giác cho trạng thái `stunned`).
-- **HUD + thanh hồi chiêu pulse**, màn thắng/thua và nút **Chơi lại**.
+- **Ông Đăng**, người giữ đèn già, có một lời dặn riêng cho từng Đêm ở màn giới thiệu.
+- **Âm thanh tổng hợp hoàn toàn bằng WebAudio**: nhạc nền đêm theo thang ngũ cung + 13 hiệu ứng,
+  không dùng file âm thanh nào.
+- **Vòng vùng an toàn** 6 m hiện dưới chân đèn đã thắp, để người chơi thấy chỗ trú.
+- Mây **nhấp nháy khi bất tử**; Bóng Mực **co lại và mất viền tím khi bị choáng**; Gió Lạc là dải
+  lụa uốn sóng; đom đóm rơi **nhấp nháy khi sắp tắt** (TTL < 2 s).
+- Lá bay xoáy quanh Mây trong 2 s báo trước cơn gió, rồi thổi theo đúng hướng gió.
+- Bộ đếm FPS ở góc màn hình để tự kiểm yêu cầu ≥ 30 FPS.
 
-> Bằng chứng phần lõi vẫn đúng: `npm run selftest` (16/16 pass) và thư mục `evidence/`
-> bao phủ pickup, deposit→lit, pulse→stun, player_hit→drop, dawn→lost, và determinism.
+> Bằng chứng phần lõi vẫn đúng: `npm run selftest` (37/37) và `evidence/phase2/SUMMARY.md`
+> (17 scenario headless, determinism, hiệu năng).
 
 ---
 
 ## Bằng chứng
 
-- `evidence/SUMMARY.txt` — tổng hợp các lần chạy + xác nhận determinism byte-identical.
-- `evidence/*.jsonl` — output headless cho từng tình huống (sinh lại bằng
-  `node scripts/gen-evidence.js`).
-- `docs/assumptions.md` — các giả định cho chỗ PRD-0 mơ hồ.
+- `evidence/phase2/SUMMARY.md` — scenario theo tính năng, tính tất định, hiệu năng.
+- `evidence/phase2/selftest.txt` — output bộ test.
+- `evidence/phase2/screens/` — ảnh chụp bản chơi (có ghi chú trung thực ảnh nào dùng hook debug).
+- `evidence/phase1/` — bằng chứng Phase 1 (số liệu cũ, giữ làm lịch sử).
 - `docs/ai-log.md` — nhật ký dùng AI.
+
+## Harness AI
+
+`AGENTS.md` (quy trình + bài học), `CLAUDE.md` (trỏ về AGENTS), skill
+`.claude/skills/contract-check/` (quy trình kiểm chứng trước khi coi là xong).
 
 ## Cấu trúc
 
 ```
-src/core/      lõi mô phỏng tất định (không phụ thuộc engine)
-src/headless/  CLI headless theo Test Contract
-web/           bản chơi 3D (Three.js)
+src/core/      lõi tất định: config (tuning), maps (3 Đêm), game (12 bước/tick)
+src/headless/  CLI theo Test Contract
+web/           bản chơi 3D: main (luồng/HUD), world (cảnh), audio, palette
 scripts/       selftest, check-contract, gen-evidence
-tests/         scenario + inputs mẫu
-evidence/      output headless + chứng minh determinism
+tests/         headless-cases.json (scenario theo tính năng)
+docs/          spec, giả định, nhật ký AI
+evidence/      phase1/, phase2/
 ```

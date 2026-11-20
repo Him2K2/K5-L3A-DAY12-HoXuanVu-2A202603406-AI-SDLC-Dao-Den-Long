@@ -1,5 +1,5 @@
-// Regenerate everything under evidence/ from scratch (reproducible).
-// Run: node scripts/gen-evidence.js
+// Regenerate evidence/phase2/ from scratch through the real headless CLI.
+// Run: node scripts/gen-evidence.js   (exit 0 = every case met its expectation)
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
@@ -7,50 +7,88 @@ import { execFileSync } from "node:child_process";
 
 const root = path.dirname(path.dirname(url.fileURLToPath(import.meta.url)));
 const RUN = path.join(root, "src/headless/run.js");
-const ev = path.join(root, "evidence");
+const ev = path.join(root, "evidence", "phase2");
+const work = path.join(ev, "cases");
 fs.rmSync(ev, { recursive: true, force: true });
-fs.mkdirSync(ev, { recursive: true });
+fs.mkdirSync(work, { recursive: true });
 
-const sc = (f) => path.join(root, "tests/scenarios", f);
-const inp = (f) => path.join(root, "tests/inputs", f);
-const log = [];
+const { cases } = JSON.parse(fs.readFileSync(path.join(root, "tests/headless-cases.json"), "utf8"));
+const get = (obj, p) => p.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
+const rows = [];
+let failed = 0;
 
-function run(label, args) {
-  const out = path.join(ev, `${label}.jsonl`);
-  execFileSync("node", [RUN, ...args, "--out", out], { stdio: "inherit" });
-  const lines = fs.readFileSync(out, "utf8").trim().split("\n");
-  const end = JSON.parse(lines.at(-1));
-  const events = lines.map((l) => JSON.parse(l)).filter((x) => x.type === "event").map((x) => x.name);
-  log.push(`${label}: ${lines.length} lines, end=${JSON.stringify(end)}, events=[${[...new Set(events)].join(", ")}]`);
-  return out;
+for (const c of cases) {
+  const args = ["--seed", "1", "--night", String(c.night), "--ticks", String(c.ticks), "--snapshot-every", "1"];
+  if (c.scenario) { const f = path.join(work, `${c.name}.scenario.json`); fs.writeFileSync(f, JSON.stringify(c.scenario, null, 2)); args.push("--scenario", f); }
+  if (c.inputs) { const f = path.join(work, `${c.name}.inputs.json`); fs.writeFileSync(f, JSON.stringify(c.inputs, null, 2)); args.push("--inputs", f); }
+  const out = path.join(ev, `${c.name}.jsonl`);
+  execFileSync("node", [RUN, ...args, "--out", out]);
+  const lines = fs.readFileSync(out, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  const names = new Set(lines.filter((l) => l.type === "event").map((l) => l.name));
+  const last = lines.filter((l) => l.type === "snapshot").at(-1);
+  const end = lines.at(-1);
+  const problems = [];
+  for (const n of c.expect.events || []) if (!names.has(n)) problems.push(`missing event ${n}`);
+  for (const n of c.expect.no_events || []) if (names.has(n)) problems.push(`unexpected event ${n}`);
+  for (const [p, want] of Object.entries(c.expect.final || {})) {
+    const got = get(last, p);
+    const ok = typeof want === "number" ? Math.abs(got - want) <= 2e-3 : got === want;
+    if (!ok) problems.push(`${p}=${JSON.stringify(got)} want ${JSON.stringify(want)}`);
+  }
+  if (c.expect.end_state && end.state !== c.expect.end_state) problems.push(`end.state=${end.state}`);
+  if (problems.length) failed++;
+  rows.push(`| ${c.ac} | \`${c.name}\` | N${c.night} | ${problems.length ? "❌ " + problems.join("; ") : "✅"} | ${[...names].join(", ") || "—"} |`);
 }
 
-// Core-rule evidence.
-run("deposit", ["--seed", "1", "--night", "1", "--scenario", sc("deposit.json"), "--inputs", inp("deposit.json"), "--ticks", "5", "--snapshot-every", "1"]);
-run("pickup", ["--seed", "1", "--night", "1", "--scenario", sc("pickup.json"), "--ticks", "5", "--snapshot-every", "1"]);
+// Determinism: two runs per night must be byte-identical.
+const det = [];
+for (const n of [1, 2, 3]) {
+  const a = path.join(work, `det-${n}-a.jsonl`), b = path.join(work, `det-${n}-b.jsonl`);
+  for (const f of [a, b]) execFileSync("node", [RUN, "--seed", "42", "--night", String(n), "--ticks", "6000", "--snapshot-every", "50", "--out", f]);
+  const same = fs.readFileSync(a, "utf8") === fs.readFileSync(b, "utf8");
+  if (!same) failed++;
+  det.push(`| Đêm ${n} | 6000 tick, seed 42 | ${same ? "✅ byte-identical" : "❌ khác nhau"} |`);
+  fs.rmSync(b);
+}
 
-// Pulse + hit need small ad-hoc input files.
-const pulseIn = path.join(ev, "_pulse-inputs.json");
-fs.writeFileSync(pulseIn, JSON.stringify({ frames: [{ tick: 0, pulse: true }, { tick: 1, pulse: false }] }, null, 2));
-run("pulse", ["--seed", "1", "--night", "1", "--scenario", sc("pulse.json"), "--inputs", pulseIn, "--ticks", "5", "--snapshot-every", "1"]);
-run("hit", ["--seed", "1", "--night", "1", "--scenario", sc("hit.json"), "--ticks", "5", "--snapshot-every", "1"]);
+// Performance: a full night at the contract's maximum length.
+const perf = [];
+for (const n of [1, 2, 3]) {
+  const t0 = process.hrtime.bigint();
+  execFileSync("node", [RUN, "--seed", "9", "--night", String(n), "--ticks", "21600", "--snapshot-every", "10", "--out", path.join(work, `perf-${n}.jsonl`)]);
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  if (ms > 30000) failed++;
+  perf.push(`| Đêm ${n} | 21 600 tick | ${ms.toFixed(0)} ms | ${ms <= 30000 ? "✅" : "❌"} |`);
+  fs.rmSync(path.join(work, `perf-${n}.jsonl`));
+}
 
-// Dawn (time out) => lost.
-const dawnSc = path.join(ev, "_dawn-scenario.json");
-fs.writeFileSync(dawnSc, JSON.stringify({ random_motes: false, random_shades: false, motes: [], shades: [], time_left_s: 0.1 }, null, 2));
-run("dawn", ["--seed", "1", "--night", "1", "--scenario", dawnSc, "--ticks", "30", "--snapshot-every", "2"]);
+const md = `# Evidence Phase 2 (Contract v1.1)
 
-// A full default night driven by the seed (motes + shade spawns), 60s of sim.
-run("default-night", ["--seed", "42", "--night", "1", "--ticks", "3600", "--snapshot-every", "30"]);
+Sinh tự động bằng \`node scripts/gen-evidence.js\` qua CLI headless thật (\`src/headless/run.js\`).
+Mỗi case: scenario + inputs nằm trong \`tests/headless-cases.json\`; bản sao file đã chạy ở \`cases/\`; output JSONL ở thư mục này.
 
-// Determinism proof: two runs, identical bytes.
-const a = run("determinism-run-a", ["--seed", "7", "--night", "1", "--ticks", "1800", "--snapshot-every", "20"]);
-const b = run("determinism-run-b", ["--seed", "7", "--night", "1", "--ticks", "1800", "--snapshot-every", "20"]);
-const identical = fs.readFileSync(a, "utf8") === fs.readFileSync(b, "utf8");
-log.push(`determinism: run-a and run-b byte-identical = ${identical}`);
-if (!identical) { console.error("DETERMINISM FAILED"); process.exit(1); }
+Node ${process.version} · ${process.platform}
 
-fs.writeFileSync(path.join(ev, "SUMMARY.txt"),
-  `Evidence generated ${new Date().toISOString()}\n` +
-  `Reproduce: node scripts/gen-evidence.js\n\n` + log.join("\n") + "\n");
-console.log("\n" + log.join("\n"));
+## Scenario theo tính năng
+
+| AC | Case | Đêm | Kết quả | Sự kiện quan sát được |
+|----|------|-----|---------|----------------------|
+${rows.join("\n")}
+
+## Tính tất định
+
+| Đêm | Lần chạy | Kết quả |
+|-----|----------|---------|
+${det.join("\n")}
+
+## Hiệu năng headless (yêu cầu ≤ 30 s)
+
+| Đêm | Độ dài | Thời gian | |
+|-----|--------|-----------|--|
+${perf.join("\n")}
+
+Bộ test chi tiết (37 test, một test cho mỗi AC + regression Phase 1): xem \`selftest.txt\`.
+`;
+fs.writeFileSync(path.join(ev, "SUMMARY.md"), md);
+console.log(md);
+process.exit(failed ? 1 : 0);

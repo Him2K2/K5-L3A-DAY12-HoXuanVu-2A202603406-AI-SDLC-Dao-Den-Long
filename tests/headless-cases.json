@@ -1,0 +1,102 @@
+{
+  "_doc": "Headless scenarios (Contract v1.1), at least one per new feature. Run: node scripts/gen-evidence.js. 'expect.events' must all appear; 'expect.final' compares paths on the last snapshot; 'expect.no_events' must not appear.",
+  "cases": [
+    {
+      "name": "run-speed", "night": 1, "ticks": 60, "ac": "AC1.1",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [] },
+      "inputs": { "frames": [{ "tick": 0, "move": [0, 1] }] },
+      "expect": { "final": { "player.pos.2": 6 } }
+    },
+    {
+      "name": "dash", "night": 1, "ticks": 12, "ac": "AC1.3",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [] },
+      "inputs": { "frames": [{ "tick": 0, "dash": true }] },
+      "expect": { "events": ["dash"], "final": { "player.pos.2": 2.8, "player.dash_cd_s": 1.317 } }
+    },
+    {
+      "name": "deposit-and-light", "night": 1, "ticks": 2, "ac": "AC1.6",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [], "player": { "pos": [0, 0, 23.5], "carried": 10 } },
+      "inputs": { "frames": [{ "tick": 0, "interact": true }] },
+      "expect": { "events": ["deposit", "lantern_lit"], "final": { "score": 200 } }
+    },
+    {
+      "name": "safe-zone-eject", "night": 1, "ticks": 90, "ac": "AC1.7",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "player": { "pos": [0, 0, 23.5], "carried": 10 }, "shades": [{ "id": "S1", "pos": [0.5, 1, 23.5], "state": "chase" }] },
+      "inputs": { "frames": [{ "tick": 0, "interact": true }] },
+      "expect": { "events": ["lantern_lit"], "no_events": ["player_hit"] }
+    },
+    {
+      "name": "pulse-stun", "night": 1, "ticks": 15, "ac": "AC1.8",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "player": { "carried": 3 }, "shades": [{ "id": "S1", "pos": [3, 1, 0] }] },
+      "inputs": { "frames": [{ "tick": 0, "pulse": true }] },
+      "expect": { "events": ["pulse"], "final": { "shades.0.state": "stunned", "shades.0.pos.0": 7, "score": 5 } }
+    },
+    {
+      "name": "shade-hit-drop", "night": 1, "ticks": 2, "ac": "AC1.11",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "player": { "carried": 7 }, "shades": [{ "id": "S1", "pos": [0.5, 1, 0] }] },
+      "expect": { "events": ["player_hit"], "final": { "player.flames": 2, "player.carried": 4, "shades.0.state": "recoil", "motes_active": 3 } }
+    },
+    {
+      "name": "shade-spawn-schedule", "night": 1, "ticks": 780, "ac": "AC1.10",
+      "scenario": { "random_motes": false },
+      "expect": { "events": ["shade_spawned"], "final": { "shades.2.id": "S3" } }
+    },
+    {
+      "name": "fall-respawn", "night": 1, "ticks": 150, "ac": "AC1.12",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [], "player": { "pos": [39.5, 0, 0], "carried": 4 } },
+      "inputs": { "frames": [{ "tick": 0, "move": [1, 0] }, { "tick": 30, "move": [0, 0] }] },
+      "expect": { "events": ["player_hit"], "final": { "player.pos.0": 0, "player.flames": 2, "player.carried": 0 } }
+    },
+    {
+      "name": "pause-resume", "night": 1, "ticks": 30, "ac": "AC1.15",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [] },
+      "inputs": { "frames": [{ "tick": 0, "move": [0, 1] }, { "tick": 10, "pause": true }, { "tick": 11, "pause": false }, { "tick": 20, "pause": true }] },
+      "expect": { "events": ["paused", "resumed"], "final": { "sim_tick": 20, "player.pos.2": 2.0 } }
+    },
+    {
+      "name": "win-all-lit", "night": 1, "ticks": 5, "ac": "AC1.13",
+      "scenario": { "random_motes": false, "random_shades": false, "motes": [], "shades": [], "player": { "pos": [0, 0, 23.5], "carried": 10 },
+        "lanterns": [{ "id": "L2", "lit": true }, { "id": "L3", "lit": true }, { "id": "L4", "lit": true }, { "id": "L5", "lit": true }] },
+      "inputs": { "frames": [{ "tick": 0, "interact": true }] },
+      "expect": { "events": ["game_over"], "end_state": "won" }
+    },
+    {
+      "name": "n2-bridge-and-pad", "night": 2, "ticks": 120, "ac": "AC2.2",
+      "scenario": { "random_motes": false, "random_shades": false, "random_drifters": false, "motes": [], "shades": [], "player": { "pos": [20, 0, 18] } },
+      "expect": { "no_events": ["player_hit"], "final": { "player.grounded": true } }
+    },
+    {
+      "name": "n3-ramp", "night": 3, "ticks": 90, "ac": "AC2.3",
+      "scenario": { "random_motes": false, "random_shades": false, "random_drifters": false, "wind_enabled": false, "motes": [], "shades": [], "player": { "pos": [26.414, 0, 15.25] } },
+      "inputs": { "frames": [{ "tick": 0, "move": [-0.866, -0.5] }] },
+      "expect": { "final": { "player.pos.1": 3, "player.grounded": true } }
+    },
+    {
+      "name": "n3-wind", "night": 3, "ticks": 1900, "ac": "AC2.4",
+      "scenario": { "random_motes": false, "random_shades": false, "random_drifters": false, "motes": [], "shades": [] },
+      "expect": { "final": { "wind.active": true } }
+    },
+    {
+      "name": "drifter-spawn", "night": 2, "ticks": 1200, "ac": "AC3.1",
+      "scenario": { "random_motes": false, "random_shades": false },
+      "expect": { "final": { "drifters.0.id": "D1", "drifters.0.state": "idle" } }
+    },
+    {
+      "name": "drifter-steal", "night": 2, "ticks": 5, "ac": "AC3.3",
+      "scenario": { "random_motes": false, "random_shades": false, "random_drifters": false, "motes": [], "shades": [], "player": { "carried": 7 }, "drifters": [{ "id": "D1", "pos": [1, 1.2, 0] }] },
+      "expect": { "events": ["drifter_steal"], "final": { "player.carried": 4, "drifters.0.state": "flee", "drifters.0.stolen": 3 } }
+    },
+    {
+      "name": "drifter-pulse-drop", "night": 2, "ticks": 5, "ac": "AC3.4",
+      "scenario": { "random_motes": false, "random_shades": false, "random_drifters": false, "motes": [], "shades": [], "player": { "carried": 3 }, "drifters": [{ "id": "D1", "pos": [3, 1.2, 0], "state": "flee", "stolen": 3 }] },
+      "inputs": { "frames": [{ "tick": 0, "pulse": true }] },
+      "expect": { "events": ["pulse", "drifter_drop"], "final": { "drifters.0.stolen": 0 } }
+    },
+    {
+      "name": "charm", "night": 2, "ticks": 60, "ac": "AC3.5",
+      "scenario": { "random_motes": false, "random_shades": false, "random_drifters": false, "motes": [], "shades": [], "player": { "pos": [34.5, 0, 0] } },
+      "inputs": { "frames": [{ "tick": 0, "move": [1, 0] }] },
+      "expect": { "events": ["charm_picked"], "final": { "player.pos.0": 41.68, "charms.0.available": false } }
+    }
+  ]
+}

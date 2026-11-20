@@ -1,0 +1,5 @@
+# Keep LF in the repo so the headless runner and scripts behave the same on macOS/Linux graders.
+* text=auto eol=lf
+*.jpg binary
+*.png binary
+*.mp4 binary
