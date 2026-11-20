@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Đảo Đèn Lồng</title>
+  <link rel="stylesheet" href="/web/style.css" />
+  <!-- Three.js via CDN (GUI build only; the headless sim has zero dependencies). -->
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div id="hud">
+    <div class="row">
+      <span class="label">Đèn</span><span id="hud-lanterns">0/5</span>
+      <span class="label">Đom đóm</span><span id="hud-carried">0</span>
+      <span class="label">Mạng</span><span id="hud-flames">●●●</span>
+      <span class="label">Giờ</span><span id="hud-time">3:00</span>
+      <span class="label">Điểm</span><span id="hud-score">0</span>
+    </div>
+    <div id="pulse-bar"><div id="pulse-fill"></div></div>
+  </div>
+
+  <div id="help">
+    WASD di chuyển · Chuột/◀▶ xoay camera · Space nhảy · E thắp đèn · Shift tỏa sáng
+  </div>
+
+  <div id="overlay" class="hidden">
+    <div class="card">
+      <h1 id="overlay-title">Thắng!</h1>
+      <p id="overlay-sub"></p>
+      <button id="replay">Chơi lại</button>
+    </div>
+  </div>
+
+  <script type="module" src="/web/main.js"></script>
+</body>
+</html>

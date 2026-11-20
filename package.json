@@ -1,0 +1,15 @@
+{
+  "name": "dao-den-long",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Dao Den Long - a 3D lantern-lighting game with a deterministic headless simulation (Test Contract v1.0).",
+  "scripts": {
+    "start": "node server.js",
+    "headless": "node src/headless/run.js",
+    "selftest": "node scripts/selftest.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

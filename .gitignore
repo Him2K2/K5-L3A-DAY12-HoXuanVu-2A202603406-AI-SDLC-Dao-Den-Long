@@ -1,0 +1,17 @@
+# deps (dự án không có runtime deps, nhưng phòng khi thêm)
+node_modules/
+
+# bí mật — KHÔNG commit
+.env
+.env.*
+*.key
+*.pem
+secrets.*
+
+# rác chạy headless ở gốc
+/run.jsonl
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db

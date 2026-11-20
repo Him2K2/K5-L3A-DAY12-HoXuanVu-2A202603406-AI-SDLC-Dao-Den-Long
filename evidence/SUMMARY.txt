@@ -1,0 +1,12 @@
+Evidence generated 2026-11-20T08:10:15.653Z
+Reproduce: node scripts/gen-evidence.js
+
+deposit: 9 lines, end={"type":"end","ticks":5,"state":"playing","score":100}, events=[deposit, lantern_lit]
+pickup: 9 lines, end={"type":"end","ticks":5,"state":"playing","score":4}, events=[mote_picked]
+pulse: 8 lines, end={"type":"end","ticks":5,"state":"playing","score":5}, events=[pulse]
+hit: 8 lines, end={"type":"end","ticks":5,"state":"playing","score":0}, events=[player_hit]
+dawn: 6 lines, end={"type":"end","ticks":6,"state":"lost","score":0}, events=[game_over]
+default-night: 53 lines, end={"type":"end","ticks":1392,"state":"lost","score":0}, events=[shade_spawned, player_hit, game_over]
+determinism-run-a: 76 lines, end={"type":"end","ticks":1392,"state":"lost","score":0}, events=[shade_spawned, player_hit, game_over]
+determinism-run-b: 76 lines, end={"type":"end","ticks":1392,"state":"lost","score":0}, events=[shade_spawned, player_hit, game_over]
+determinism: run-a and run-b byte-identical = true
