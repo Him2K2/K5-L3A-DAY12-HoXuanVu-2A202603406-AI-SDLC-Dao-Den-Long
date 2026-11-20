@@ -26,7 +26,7 @@ addEventListener("resize", () => {
 
 // ---------------------------------------------------------------- settings (persisted)
 const SETTINGS_KEY = "ddl.settings.v1";
-const settings = { volume: 0.7, sens: 1.0, colorBlind: false };
+const settings = { volume: 0.7, sens: 1.0, colorBlind: false, camMode: "fp" }; // camMode: "fp" | "tp"
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch { /* private mode */ }
 const saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* ignore */ } };
 
@@ -47,6 +47,7 @@ const app = {
   game: null,
   world: null,
   camYaw: 0,
+  camPitch: 0, // degrees, view only (the sim only receives camYaw)
   lastSecond: null,
   warned: false,
 };
@@ -76,6 +77,7 @@ function loadNight(n) {
   app.world = new World(scene, app.game);
   app.world.setColorBlind(!!settings.colorBlind);
   app.camYaw = 0;
+  applyCamMode();
   app.lastSecond = null;
   app.warned = false;
   resetEdges();
@@ -97,25 +99,33 @@ addEventListener("keydown", (e) => {
     if (app.screen === "pause") return resume();
   }
   if (e.code === "Enter" && app.screen === "intro") return beginPlay();
+  if (e.code === "KeyV" && !e.repeat && app.screen === "play") {
+    settings.camMode = settings.camMode === "fp" ? "tp" : "fp";
+    saveSettings();
+    applyCamMode();
+    return;
+  }
   keys[e.code] = true;
 });
 addEventListener("keyup", (e) => { keys[e.code] = false; });
 addEventListener("blur", resetEdges);
 
+// Mouse-look (first-person style): moving the mouse turns the view — yaw and pitch.
+// Pointer lock is requested when play starts (a click), so the cursor never hits the screen edge.
 const canvas = renderer.domElement;
-let dragging = false, lastX = 0;
-canvas.addEventListener("mousedown", (e) => {
-  if (app.screen !== "play") return;
-  if (canvas.requestPointerLock && !document.pointerLockElement) canvas.requestPointerLock();
-  dragging = true; lastX = e.clientX;
-});
-addEventListener("mouseup", () => { dragging = false; });
+const lockPointer = () => {
+  if (canvas.requestPointerLock && document.pointerLockElement !== canvas) {
+    try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch { /* not allowed here */ }
+  }
+};
+const PITCH = { fp: [-80, 80], tp: [-60, 25] };
+canvas.addEventListener("mousedown", () => { if (app.screen === "play") lockPointer(); });
 addEventListener("mousemove", (e) => {
   if (app.screen !== "play") return;
-  let dx = 0;
-  if (document.pointerLockElement === canvas) dx = e.movementX;
-  else if (dragging) { dx = e.clientX - lastX; lastX = e.clientX; }
-  app.camYaw -= dx * 0.25 * settings.sens;
+  const k = 0.15 * settings.sens; // degrees per pixel
+  app.camYaw -= e.movementX * k;
+  const [lo, hi] = PITCH[settings.camMode];
+  app.camPitch = Math.max(lo, Math.min(hi, app.camPitch - e.movementY * k));
 });
 document.addEventListener("pointerlockchange", () => {
   // Browsers exit pointer lock on Esc without delivering the key: treat it as "pause".
@@ -148,9 +158,10 @@ function beginPlay() {
   audio.startMusic();
   audio.play("click");
   show("play");
+  lockPointer(); // called from a click/Enter, so the browser allows it
 }
 function pause() { if (app.screen !== "play") return; show("pause"); }
-function resume() { audio.play("click"); resetEdges(); show("play"); }
+function resume() { audio.play("click"); resetEdges(); show("play"); lockPointer(); }
 function openSettings(back) {
   app.settingsBack = back;
   $("set-volume").value = Math.round(settings.volume * 100);
@@ -312,14 +323,47 @@ function updateHUD() {
 }
 
 // ---------------------------------------------------------------- camera + loop
+// Look direction from yaw/pitch, matching the contract's camera frame: yaw 0 looks down +Z.
+function lookDir() {
+  const th = (app.camYaw * Math.PI) / 180, ph = (app.camPitch * Math.PI) / 180;
+  return [Math.sin(th) * Math.cos(ph), Math.sin(ph), Math.cos(th) * Math.cos(ph)];
+}
+const EYE_H = 1.45; // Mây's eyes, just under the nón lá
 function updateCamera() {
   const p = app.game.player;
-  const th = (app.camYaw * Math.PI) / 180;
-  const fx = Math.sin(th), fz = Math.cos(th);
-  const camDist = 12, camH = 6.5;
-  const ty = Math.max(p.y, -2);
-  camera.position.set(p.x - fx * camDist, ty + camH, p.z - fz * camDist);
-  camera.lookAt(p.x, ty + 1.4, p.z);
+  const [dx, dy, dz] = lookDir();
+  if (settings.camMode === "fp") {
+    camera.position.set(p.x, p.y + EYE_H, p.z);
+    camera.lookAt(p.x + dx, p.y + EYE_H + dy, p.z + dz);
+  } else {
+    const dist = 11, ty = Math.max(p.y, -2) + 1.4;
+    camera.position.set(p.x - dx * dist, ty - dy * dist, p.z - dz * dist);
+    camera.lookAt(p.x, ty, p.z);
+  }
+}
+
+// First-person: hide Mây's body (keep her lantern light), show a hand-held lantern + crosshair.
+const hand = new THREE.Group();
+{
+  const paper = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.12, 8),
+    new THREE.MeshStandardMaterial({ color: PAL.lanternLit, emissive: PAL.lanternLit, emissiveIntensity: 1.2 }));
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.05, 8), new THREE.MeshStandardMaterial({ color: 0x3a2a1c }));
+  cap.position.y = 0.085;
+  const string = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.18, 4), new THREE.MeshBasicMaterial({ color: 0x3a2a1c }));
+  string.position.y = 0.2;
+  hand.add(paper, cap, string);
+  hand.position.set(0.34, -0.3, -0.95); // small, lower-right, clear of the HUD cooldown icons
+  hand.scale.setScalar(0.55);
+  camera.add(hand);
+  scene.add(camera); // children of the camera only render if the camera is in the scene
+}
+function applyCamMode() {
+  const fp = settings.camMode === "fp";
+  app.camPitch = fp ? 0 : -22;
+  if (app.world) app.world.setFirstPerson(fp);
+  hand.visible = fp;
+  $("crosshair").classList.toggle("hidden", !fp);
+  $("cam-mode").textContent = fp ? "Góc nhìn thứ nhất · V" : "Góc nhìn thứ ba · V";
 }
 
 let acc = 0, last = performance.now(), fpsFrames = 0, fpsT = 0;
@@ -340,6 +384,7 @@ function frame(now) {
     camera.position.set(Math.sin(now / 8000) * 30, 18, Math.cos(now / 8000) * 30);
     camera.lookAt(0, 0, 0);
   }
+  hand.visible = settings.camMode === "fp" && !!app.game && !app.game.player.fallen;
   renderer.render(scene, camera);
   fpsFrames++; fpsT += dt;
   if (fpsT >= 0.5) { $("fps").textContent = `${Math.round(fpsFrames / fpsT)} FPS`; fpsFrames = 0; fpsT = 0; }

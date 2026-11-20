@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Bản chơi (không đổi contract, không đổi output headless)
+- **Góc nhìn thứ nhất mặc định** theo yêu cầu playtest: di chuột là xoay góc nhìn (ngang + dọc, dọc giới hạn ±80°),
+  chuột tự khoá khi vào đảo / tiếp tục; tâm ngắm giữa màn hình; đèn lồng nhỏ cầm tay ở góc dưới phải;
+  thân Mây ẩn nhưng ánh sáng đèn lồng của Mây vẫn giữ.
+- Phím **V** đổi sang góc nhìn thứ ba (camera sau lưng, có xoay dọc); lựa chọn được lưu.
+- Lõi vẫn chỉ nhận `cam_yaw_deg` như contract; góc nhìn dọc thuần hiển thị. Đã kiểm: sau khi quay 45°,
+  W đi đúng hướng nhìn, D đi đúng sang phải màn hình (6 m/s).
+
 ## [phase-3] — Contract v1.2 · TICKET-03 "Đèn cạn dầu" (2026-11-20)
 
 Quyết định thiết kế: [docs/adr/0001-lantern-fuel-and-dawn-win.md](docs/adr/0001-lantern-fuel-and-dawn-win.md) ·

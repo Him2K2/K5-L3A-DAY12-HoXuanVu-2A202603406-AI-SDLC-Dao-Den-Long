@@ -69,6 +69,8 @@ export class World {
     this.colorBlind = false;
   }
 
+  setFirstPerson(on) { this.fp = on; }
+
   // TICKET-03 colour-blind palette: shade rim/eyes #7A3CFF -> #00B3FF; lantern shapes differ (see sync).
   setColorBlind(on) {
     this.colorBlind = on;
@@ -204,6 +206,8 @@ export class World {
     g.add(body, scarf, head, hat, lamp, light);
     this.root.add(g);
     this.player = g;
+    this.playerMeshes = [body, scarf, head, hat, lamp]; // hidden in first-person; the light stays on
+    this.fp = false;
   }
 
   _buildLeaves() {
@@ -225,8 +229,9 @@ export class World {
     const p = game.player;
     this.player.position.set(p.x, p.y, p.z);
     this.player.rotation.y = Math.atan2(p.facing[0], p.facing[1]);
-    // Blink while invulnerable.
-    this.player.visible = !(p.invuln > 0 && Math.floor(now * 12) % 2 === 0) && !p.fallen;
+    // Body hidden in first-person, blinking while invulnerable, gone while waiting to respawn.
+    const showBody = !this.fp && !(p.invuln > 0 && Math.floor(now * 12) % 2 === 0) && !p.fallen;
+    for (const m of this.playerMeshes) m.visible = showBody;
 
     const lit = game.lanterns.filter((l) => l.lit).length;
     this.hemi.intensity = ambientFor(lit, game.lanterns.length) * 4; // ticket formula, scaled to three's physical units

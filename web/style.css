@@ -58,6 +58,9 @@ body.cb { --danger: #ffffff; }
 .setting.check { justify-content: flex-start; align-items: center; gap: 10px; }
 .setting.check input { width: auto; }
 #arrow { position: absolute; font-size: 34px; color: var(--lit); text-shadow: 0 0 10px rgba(255,179,71,.9); }
+#crosshair { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%;
+  background: var(--core); border: 1.5px solid rgba(14,20,48,.85); box-shadow: 0 0 6px rgba(255,179,71,.9); }
+#cam-mode { position: absolute; left: 18px; bottom: 26px; font-size: 11px; opacity: .55; }
 #fps { position: fixed; left: 10px; bottom: 8px; font-size: 11px; opacity: .55; z-index: 11; pointer-events: none; }
 
 /* ---------- screens ---------- */

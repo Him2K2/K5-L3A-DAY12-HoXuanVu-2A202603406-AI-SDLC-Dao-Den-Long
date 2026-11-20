@@ -41,7 +41,9 @@ node scripts/gen-evidence.js     # chạy mọi scenario headless → evidence/p
 | Phím | Hành động |
 |------|-----------|
 | `W A S D` / `↑ ↓` | Chạy (theo hướng camera) |
-| Chuột (click để khoá chuột) / kéo / `◀ ▶` | Xoay camera |
+| Di chuột | Nhìn quanh (ngang + dọc), chuột tự khoá khi vào đảo |
+| `V` | Đổi góc nhìn thứ nhất ⇄ thứ ba (được lưu) |
+| `◀ ▶` | Xoay ngang bằng phím |
 | `Space` | Nhảy |
 | `Shift` | Lướt |
 | `E` | Nạp ánh sáng / thắp lại / châm dầu cho Đèn Lồng |
