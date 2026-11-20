@@ -19,19 +19,20 @@ addEventListener("resize", () => {
 });
 
 // --- static world ---
-scene.add(new THREE.AmbientLight(0x3a2f5a, 1.1));
-const moon = new THREE.DirectionalLight(0x8899dd, 0.5);
+// three r160 uses physical light units: keep ambient/hemisphere generous.
+scene.add(new THREE.HemisphereLight(0x8090c0, 0x2f5d50, 1.6));
+const moon = new THREE.DirectionalLight(0xaabbee, 1.2);
 moon.position.set(-20, 40, -10);
 scene.add(moon);
 
 const island = new THREE.Mesh(
   new THREE.CylinderGeometry(ISLAND_RADIUS, ISLAND_RADIUS - 3, 2, 64),
-  new THREE.MeshStandardMaterial({ color: 0x241a38, roughness: 1 })
+  new THREE.MeshStandardMaterial({ color: 0x2f5d50, roughness: 1 })
 );
 island.position.y = -1;
 scene.add(island);
 
-const matLantern = new THREE.MeshStandardMaterial({ color: 0x2a2140, emissive: 0x000000 });
+const matLantern = new THREE.MeshStandardMaterial({ color: 0x5b5f6e, emissive: 0x22242c });
 const matLanternLit = new THREE.MeshStandardMaterial({ color: 0xffce7a, emissive: 0xff9f3a, emissiveIntensity: 1.4 });
 
 let game, lanternMeshes, moteMeshes, shadeMeshes, playerGroup, lantGlows;
@@ -50,7 +51,7 @@ function buildWorld() {
   const hat = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.5, 16),
     new THREE.MeshStandardMaterial({ color: 0xc89b5a }));
   hat.position.y = 1.5;
-  const lamp = new THREE.PointLight(0xffb347, 1.4, 14, 2);
+  const lamp = new THREE.PointLight(0xffb347, 30, 14, 2);
   lamp.position.set(0.6, 1.2, 0);
   const lampBulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8),
     new THREE.MeshStandardMaterial({ color: 0xffd27f, emissive: 0xffb347, emissiveIntensity: 2 }));
@@ -116,8 +117,10 @@ function gatherInput() {
   let x = 0, z = 0;
   if (keys["KeyW"]) z += 1;
   if (keys["KeyS"]) z -= 1;
-  if (keys["KeyD"]) x += 1;
-  if (keys["KeyA"]) x -= 1;
+  // Contract: move x=+1 at yaw 0 is world +X, which is screen-LEFT for a camera
+  // looking down +Z. So screen-right (D) maps to x = -1.
+  if (keys["KeyD"]) x -= 1;
+  if (keys["KeyA"]) x += 1;
   const heldJump = !!keys["Space"];
   const heldInteract = !!keys["KeyE"];
   const heldPulse = !!(keys["ShiftLeft"] || keys["ShiftRight"] || keys["KeyQ"]);
@@ -167,7 +170,7 @@ function syncVisuals() {
   });
   for (const l of game.lanterns) {
     lanternMeshes[l.id].material = l.lit ? matLanternLit : matLantern;
-    lantGlows[l.id].intensity = l.lit ? 2.2 : 0;
+    lantGlows[l.id].intensity = l.lit ? 120 : 0;
   }
   const seen = new Set();
   for (const s of game.shades) {
