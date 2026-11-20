@@ -1,4 +1,9 @@
-# Kịch bản video demo (≤ 5 phút)
+# Video demo
+
+**Video:** [`demo.mp4`](demo.mp4) (2 phút 40 giây, 68 MB, dưới giới hạn 100 MB của GitHub nên commit thẳng vào repo
+theo phương án B của SUBMISSION.md). Link được đặt ở đầu `README.md`.
+
+## Kịch bản đã dùng để quay (≤ 5 phút)
 
 Video phải là **.mp4 dưới 5 phút**, đặt ở `docs/demo/demo.mp4` hoặc đính kèm GitHub Release v1.0.0, và link ở
 đầu README. Quay bằng Xbox Game Bar (Windows: `Win + Alt + R`), OBS, hoặc QuickTime (macOS).

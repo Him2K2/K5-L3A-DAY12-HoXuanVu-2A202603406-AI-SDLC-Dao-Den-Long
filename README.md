@@ -1,6 +1,6 @@
 # Đảo Đèn Lồng 🏮 — v1.0.0
 
-> **Video demo:** _(đặt link `docs/demo/demo.mp4` hoặc file đính kèm GitHub Release v1.0.0 tại đây)_
+> 🎬 **Video demo (2:40):** [docs/demo/demo.mp4](docs/demo/demo.mp4) — chơi trực tiếp, test, headless, bench.
 
 Game 3D góc nhìn thứ nhất: bé **Mây** đội nón lá, cầm chiếc đèn lồng nhỏ, chạy qua **ba hòn đảo** giữa biển
 mây. Mây thu **đom đóm** để **thắp và châm dầu cho các Đèn Lồng Lớn**, **giữ đảo sáng tới bình minh**, né
@@ -26,7 +26,7 @@ Kiến trúc: **một lõi mô phỏng tất định** (`src/core/`) dùng chung
 ## Cài đặt & chơi (≤ 3 lệnh, từ repo sạch)
 
 ```bash
-git clone https://github.com/Him2K2/K5-L3A-DAY12-HoXuanVu-2A202603406-DaoLongMa.git && cd K5-L3A-DAY12-HoXuanVu-2A202603406-DaoLongMa
+git clone https://github.com/Him2K2/K5-L3A-DAY12-HoXuanVu-2A202603406-AI-SDLC-Dao-Den-Long.git && cd K5-L3A-DAY12-HoXuanVu-2A202603406-AI-SDLC-Dao-Den-Long
 npm install
 node server.js        # tự mở http://localhost:8080 (thêm --no-open nếu không muốn mở trình duyệt)
 ```
