@@ -1,0 +1,54 @@
+{
+  "contract_version": "1.3",
+  "avg_fps": 168.6,
+  "p1_low_fps": 46.9,
+  "frame_ms_p95": 9.2,
+  "frames": 5057,
+  "load_ms": 4876,
+  "peak_mem_mb": 550,
+  "vsync_off": true,
+  "renderer": "three.js r160 WebGL2 · Chrome/127.0.0.0 · ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Ti (0x00001F95) Direct3D11 vs_5_0 ps_5_0, D3D11) (Puppeteer Chrome/127.0.6533.88, windowed 1280x720, --disable-gpu-vsync --disable-frame-rate-limit)",
+  "os": "Windows_NT 10.0.26200 x64 · AMD Ryzen 5 4600H with Radeon Graphics · 8 GB RAM",
+  "scene": {
+    "seed": 42,
+    "duration_s": 30,
+    "shades": 200,
+    "motes": 100,
+    "warmup_s": 3
+  },
+  "peak_mem_note": "RSS summed over the Chrome process tree (browser + GPU + renderer), sampled every 2 s while measuring by a low-priority sampler.",
+  "slow_frames_over_25ms": [
+    [
+      3.22,
+      129.1
+    ],
+    [
+      3.31,
+      61.7
+    ],
+    [
+      3.35,
+      34
+    ],
+    [
+      19.74,
+      33.5
+    ],
+    [
+      22.55,
+      34.6
+    ],
+    [
+      24.02,
+      91.1
+    ],
+    [
+      29.99,
+      35.8
+    ],
+    [
+      32.82,
+      92
+    ]
+  ]
+}

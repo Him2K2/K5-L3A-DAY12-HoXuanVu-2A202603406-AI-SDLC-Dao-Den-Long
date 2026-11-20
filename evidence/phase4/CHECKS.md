@@ -9,7 +9,11 @@ GTX 1650 Ti) hoặc lệnh shell. Chỗ nào dựng cảnh bằng hook debug `wi
 | Chạy thử 3 s (bộ đo RAM cũ: PowerShell mỗi 1 s) | avg 150.2 · **p1_low 13.9** · p95 9.0 · load 3412 ms · RAM 482 MB | `p1_low` dưới ngưỡng ⇒ điều tra |
 | 8 s, bộ đo RAM cũ / tắt đo RAM | **p1_low 38.0** / **86.5** (avg 136.9 / 167.5) | Bộ đo RAM gây khựng ⇒ thay bằng tiến trình đo sống lâu, ưu tiên Idle, mỗi 2 s |
 | 3 lần bị gián đoạn | "Target closed", "detached Frame", "Execution context destroyed" | Log sự kiện: `page closed` → `browser disconnected`, **không crash** ⇒ cửa sổ bị đóng tay |
-| Chạy chính thức 30 s | xem [`../../bench.json`](../../bench.json) | chạy sau khi đã báo người dùng không đóng cửa sổ |
+| **Chạy chính thức 30 s** (`--seed 42`) | **avg 168.6 · p1_low 46.9 · p95 9.2 ms · 5057 khung · load 4876 ms · RAM 550 MB**, exit 0 | Đạt cả 3 ngưỡng (≥ 60 / ≥ 30 / ≤ 10000). Chạy sau khi người dùng đồng ý và để yên cửa sổ. File: [`../../bench.json`](../../bench.json) |
+
+Khung chậm nhất của lần chính thức nằm ngay sau khởi động (3.2 s: 129 ms) và rải rác vài khung 34–92 ms
+(`slow_frames_over_25ms` trong `bench.json`). Số trên là máy tác giả (Ryzen 5 4600H, GTX 1650 Ti, 8 GB, Windows 11);
+máy chấm của giảng viên mới là số chính thức.
 
 Vsync tắt bằng `--disable-gpu-vsync --disable-frame-rate-limit` (avg > 60 FPS xác nhận không bị khoá theo màn hình).
 
