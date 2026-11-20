@@ -1,7 +1,7 @@
 # AGENTS.md — Harness cho AI khi làm việc trên repo này
 
 Hợp đồng giữa người và AI agent khi phát triển **Đảo Đèn Lồng**.
-Mục tiêu tối thượng: **đúng Test Contract (hiện tại v1.1) và tất định**. Đẹp/phức tạp đứng sau.
+Mục tiêu tối thượng: **đúng Test Contract (hiện tại v1.2) và tất định**. Đẹp/phức tạp đứng sau.
 
 ## Quy tắc bất biến
 
@@ -38,6 +38,17 @@ Mục tiêu tối thượng: **đúng Test Contract (hiện tại v1.1) và tấ
 7. **Kiểm bản chơi** trong trình duyệt (`npm start`): FPS ≥ 30 ở 1280×720, các màn hình, HUD.
 8. **Ghi lại**: `docs/ai-log.md` (lỗi AI, token), README (điều khiển/điểm), commit nhỏ theo bước.
 
+### Thêm cho Change Request (ticket có mục [THAY THẾ], ví dụ TICKET-03)
+
+1. Viết **ADR** trong `docs/adr/NNNN-*.md` *trước khi code*: bối cảnh, quyết định (vẽ máy trạng thái nếu đổi
+   mô hình), phương án đã loại, hệ quả.
+2. Ghi **breaking changes** vào `CHANGELOG.md` (bảng Trước → Sau → Ảnh hưởng).
+3. Chạy selftest **trước khi sửa test** để xem chính xác test nào luật mới làm sai. Mỗi test bị ảnh hưởng:
+   cập nhật hoặc xoá, kèm comment `// [Pn UPDATED] lý do` / `// [Pn REMOVED] lý do` ngay tại chỗ và một dòng
+   trong bảng "Test cập nhật / xoá" của CHANGELOG. **Cấm skip âm thầm.**
+4. Test không bị luật mới thay thế phải giữ nguyên và vẫn đạt (regression).
+5. Bản chơi: ý sáng tạo nào xung đột luật mới thì sửa theo luật mới (ví dụ vòng vùng an toàn phải ẩn khi đèn yếu).
+
 ## Bài học đã trả giá (đọc trước khi sửa)
 
 - **Snapshot làm tròn 3 chữ số** → test so giá trị dẫn xuất (khoảng cách…) phải dùng sai số ~2e-3,
@@ -49,6 +60,15 @@ Mục tiêu tối thượng: **đúng Test Contract (hiện tại v1.1) và tấ
 - **three.js r160 dùng đơn vị ánh sáng vật lý**: cường độ PointLight cỡ hàng chục, không phải ~1.
 - Bóng Mực trong scenario giữ nguyên `y` ở snapshot tick 0; khi di chuyển `y = mặt đất + 1`.
   Muốn test chênh cao thì nâng **Mây**, không nâng Bóng.
+- **Dầu đèn là số nguyên đơn vị 1/60** (`fuelU`). Không bao giờ cộng/trừ 1/60 dạng số thực. Đổi ra số thực
+  chỉ ở `fuelOut()` (snapshot/sự kiện) — và ở HUD dùng `floor(fuelU/60)`, đừng làm tròn trước rồi floor
+  (lỗi thật: HUD hiện "100/100" khi đèn còn châm được).
+- Dầu trừ ở bước 2 **trước** tương tác ⇒ lúc bấm E đèn sáng không bao giờ đầy đúng 100.
+- Mọi kiểm "có vùng an toàn không" phải qua `_hasSafeZone(l)` (sáng **và** fuel ≥ 30), không viết lại `l.lit`.
+- Web: cập nhật camera **trước** `world.sync()` vì billboard (thanh dầu) copy quaternion của camera
+  (lỗi thật: thanh dầu bị quay lưng, biến mất ở khung đầu).
+- Trang ẩn ⇒ `requestAnimationFrame` dừng. Để kiểm HUD khi không ai nhìn, dùng `window.__ddl.debugAdvance(n)`
+  (chạy đúng các hàm thật), và ghi rõ trong evidence ảnh nào có dựng cảnh bằng hook debug.
 
 ## Bản đồ mã nguồn
 
@@ -65,6 +85,8 @@ Mục tiêu tối thượng: **đúng Test Contract (hiện tại v1.1) và tấ
 | `web/audio.js` | Âm thanh tổng hợp WebAudio (bảng sự kiện→âm ở đầu file) |
 | `web/palette.js` | Bảng màu chuẩn TICKET-02 + công thức ánh sáng môi trường |
 | `tests/headless-cases.json` | Scenario headless theo tính năng (≥ 1/tính năng) |
+| `docs/adr/` | Quyết định thiết kế (ADR) cho các thay đổi luật lõi |
+| `CHANGELOG.md` | Breaking changes theo phase + bảng test cập nhật/xoá |
 
 ## Checklist review diff
 

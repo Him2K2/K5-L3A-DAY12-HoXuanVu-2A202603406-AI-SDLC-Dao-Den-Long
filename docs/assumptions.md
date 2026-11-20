@@ -78,6 +78,30 @@ Nguồn sự thật: `src/core/config.js` (tuning), `src/core/maps.js` (bản đ
   đầu cơn. Báo trước 120 tick chỉ là hiệu ứng (lá bay + âm thanh), không ảnh hưởng logic.
 - `wind_enabled` mặc định `true` ở Đêm 3, `false` ở Đêm 1, 2.
 
+## Phase 3 — TICKET-03 (xem thêm ADR 0001)
+
+- **Dầu lưu bằng số nguyên** đơn vị 1/60 (`fuelU`, max 6000). Snapshot/sự kiện: `round(fuelU/60, 1)`.
+  `fuel: 30` trong scenario = 1800 đơn vị; vùng an toàn khi `fuelU ≥ 1800`.
+- **Dầu bị trừ ở bước 2, trước bước tương tác** (đúng thứ tự ticket). Hệ quả: lúc bấm E, một đèn đang
+  sáng không bao giờ còn đúng 100 (đã hao 1/60), nên công thức `ceil((100 − 99.98)/10) = 1` → châm 1 đom
+  đóm. Luật "đèn đầy (used = 0) không được chọn" vẫn được cài nhưng thực tế gần như không xảy ra.
+- `wander` **có đèn yếu**: đi tới đèn yếu gần nhất bằng **tốc độ Bóng chuẩn** (4.0; Đêm 3: 4.5 m/s);
+  **không có**: lượn (1.5 m/s, bán kính 5 m) quanh **đèn tắt gần nhất**; không còn đèn tắt nào thì lượn
+  quanh chỗ của nó. Mục tiêu đèn yếu được tính lại mỗi tick (luôn là gần nhất).
+- `drain`: kiểm điều kiện rời ở đầu bước di chuyển Bóng (bước 8), thứ tự ưu tiên: Mây ≤ 6 m → `chase`;
+  rồi đèn không còn yếu (tắt hoặc ≥ 30) hoặc cách > 2 m → `wander`. Bóng đang `drain` không gây sát thương
+  (nó chuyển `chase` trước khi tới bước chạm nếu Mây lại gần).
+- Châm dầu lên ≥ 30 khi có Bóng trong 6 m: dùng lại cơ chế đẩy ra mép 30 tick của Phase 2 cho **mọi** Bóng
+  trong vùng; Bóng đang `drain` ở đó chuyển `wander`.
+- `fuel_drain` ghi khi bộ đếm tick hút **liên tục** của từng Bóng chia hết cho 60 (tick hút thứ 60, 120…);
+  rời `drain` thì bộ đếm về 0. `fuel` trong sự kiện là dầu sau khi trừ ở tick đó (không âm).
+- Đèn đặt `lit: true` trong scenario → `ever_lit = true` (trừ khi scenario ghi rõ `ever_lit`), `relit_count = 0`.
+- `successful_lights` tăng ngay khi thắp; sức chứa mới có hiệu lực cho lần nhặt ở tick sau (nhặt ở bước 4,
+  thắp ở bước 5).
+- Điểm Tỏa Sáng: +5 cho mỗi Bóng trúng, hoặc +15 (thay vì +5) nếu Bóng đó đang `drain` ngay trước tick
+  kích hoạt.
+- Thắng ở bình minh: mỗi đèn sáng `50 + floor(fuelU / 60)`, mỗi Ngọn Lửa 50. Thua không có thưởng.
+
 ### Điểm & kết thúc
 - `score` trong snapshot/end là điểm **của Đêm đang chạy** (cộng dồn kể cả khi thua). Bản chơi
   hiển thị tổng các Đêm đã thắng theo ticket.

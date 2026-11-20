@@ -24,6 +24,10 @@ Run these from the repo root, in order, and stop at the first failure.
    Must exit 0. Commit the regenerated `evidence/phaseN/`.
 
 4. **New feature?** Add at least one case to `tests/headless-cases.json` and one AC-named test.
+   **Rule change (change request)?** Run step 2 *before* editing any test to list exactly which old tests
+   the new rule breaks; update or delete each one with a `[Pn UPDATED]` / `[Pn REMOVED]` comment and a row
+   in `CHANGELOG.md`. Never skip a test silently. Evidence goes to `evidence/<phase>/`
+   (`PHASE=phase4 node scripts/gen-evidence.js`).
 
 5. **Report honestly**: paste the pass/fail counts; mention anything only checked manually
    (GUI screens, audio, FPS) and how.

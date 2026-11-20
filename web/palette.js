@@ -22,6 +22,12 @@ export const PAL = {
   uiText: 0xf5f1e6,
 };
 
+// TICKET-03 colour-blind-friendly overrides ("Bảng màu dễ phân biệt").
+export const PAL_CB = {
+  shadeRim: 0x00b3ff, // was #7A3CFF
+  uiDanger: 0xffffff, // was #FF5A5F, shown with a ⚠ icon
+};
+
 export const css = (hex) => `#${hex.toString(16).padStart(6, "0")}`;
 
 // Ambient light grows with progress (ticket): 0.15 + 0.55 * lit/total.

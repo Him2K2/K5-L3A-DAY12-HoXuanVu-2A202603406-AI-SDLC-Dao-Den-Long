@@ -3,6 +3,7 @@
 //   mote_picked: pickup | lantern_lit: lit | pulse: pulse | player_hit: hit | jump: jump
 //   dash: dash | won: win | lost: lose | shade_spawned: spawn | last 10 s: tick
 //   charm_picked: charm | drifter_steal: steal | wind warning: wind
+//   (Phase 3) refuel: refuel | lantern_out: out | fuel_drain: drain
 
 export class Audio {
   constructor() {
@@ -92,6 +93,9 @@ export class Audio {
       case "steal": this._tone(600, 0.3, { type: "sine", gain: 0.18, slideTo: 200 }); break;
       case "wind": this._noise(1.6, { gain: 0.18, freq: 400, sweepTo: 1400, q: 0.5 }); break;
       case "click": this._tone(660, 0.05, { type: "sine", gain: 0.12 }); break;
+      case "refuel": [440, 554].forEach((f, i) => this._tone(f, 0.25, { type: "triangle", gain: 0.16, at: i * 0.06 })); break;
+      case "out": this._tone(392, 0.9, { type: "sine", gain: 0.2, slideTo: 98 }); this._noise(0.5, { gain: 0.08, freq: 500, type: "lowpass" }); break;
+      case "drain": this._tone(110, 0.4, { type: "sawtooth", gain: 0.07, slideTo: 80 }); break;
     }
   }
 

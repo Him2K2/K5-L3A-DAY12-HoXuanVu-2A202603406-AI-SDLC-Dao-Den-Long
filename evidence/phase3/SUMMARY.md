@@ -47,8 +47,8 @@ Node v22.5.1 · win32
 
 | Đêm | Độ dài | Thời gian | |
 |-----|--------|-----------|--|
-| Đêm 1 | 21 600 tick | 240 ms | ✅ |
-| Đêm 2 | 21 600 tick | 293 ms | ✅ |
-| Đêm 3 | 21 600 tick | 297 ms | ✅ |
+| Đêm 1 | 21 600 tick | 252 ms | ✅ |
+| Đêm 2 | 21 600 tick | 305 ms | ✅ |
+| Đêm 3 | 21 600 tick | 324 ms | ✅ |
 
 Bộ test chi tiết (mỗi AC một test + regression các phase trước): xem `selftest.txt`.

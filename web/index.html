@@ -19,7 +19,7 @@
     <div id="hud-flames" class="hud-tl"></div>
     <div id="hud-time" class="hud-tc">05:00</div>
     <div class="hud-tr">
-      <div><span class="lbl">Đèn</span> <b id="hud-lanterns">0/5</b></div>
+      <div><span class="lbl">Đèn sáng</span> <b id="hud-lanterns">0/5</b> <span id="hud-need" class="need">cần 3</span></div>
       <div><span class="lbl">Điểm</span> <b id="hud-score" class="gold">0</b></div>
     </div>
     <div id="motebar" class="hud-bc"></div>
@@ -30,6 +30,7 @@
     <div id="charm-ind" class="hidden">Bùa Gió</div>
     <div id="prompt" class="hidden">E — Nạp ánh sáng (0/10)</div>
     <div id="wind-warn" class="hidden">🍃 Gió sắp nổi!</div>
+    <div id="fuel-warn" class="hidden">Đèn sắp cạn dầu</div>
     <div id="arrow" class="hidden">➤</div>
   </div>
   <div id="fps">— FPS</div>
@@ -39,7 +40,7 @@
     <div class="card wide">
       <div class="kicker">Một đêm giữa biển mây</div>
       <h1>Đảo Đèn Lồng</h1>
-      <p class="muted">Giúp Mây thu đom đóm, thắp lại Đèn Lồng Lớn trên ba hòn đảo trước bình minh.</p>
+      <p class="muted">Giúp Mây thu đom đóm, thắp và châm dầu cho Đèn Lồng Lớn — giữ đảo sáng tới bình minh.</p>
       <button id="btn-start" class="primary">Bắt đầu</button>
       <div class="row">
         <span class="muted small">Chơi thử:</span>
@@ -79,6 +80,7 @@
         <input id="set-volume" type="range" min="0" max="100" step="1" /></label>
       <label class="setting">Độ nhạy chuột <span id="lbl-sens">1.0×</span>
         <input id="set-sens" type="range" min="0.2" max="3" step="0.1" /></label>
+      <label class="setting check"><input id="set-cb" type="checkbox" /> Bảng màu dễ phân biệt (mù màu)</label>
       <p class="muted small">Được lưu lại cho lần mở game sau.</p>
       <button id="btn-settings-back" class="primary">Quay lại</button>
     </div>

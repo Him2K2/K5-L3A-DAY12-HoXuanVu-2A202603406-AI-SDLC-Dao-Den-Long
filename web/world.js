@@ -1,7 +1,7 @@
 // Builds the 3D scene for one night and keeps entity meshes in sync with the Game.
 // Pure presentation: nothing here changes gameplay state.
 import * as THREE from "three";
-import { PAL, ambientFor } from "./palette.js";
+import { PAL, PAL_CB, ambientFor } from "./palette.js";
 
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.9, ...extra });
 
@@ -16,6 +16,10 @@ const G = {
   lantern: new THREE.CylinderGeometry(0.55, 0.55, 0.9, 8),
   lanternCap: new THREE.ConeGeometry(0.75, 0.45, 8),
   ring: new THREE.RingGeometry(5.85, 6, 64),
+  // Colour-blind mode: an unlit lantern's paper is torn (open sector) and squashed 20%.
+  lanternTorn: new THREE.CylinderGeometry(0.55, 0.55, 0.9, 8, 1, false, 0.5, Math.PI * 2 - 1.1),
+  barBg: new THREE.PlaneGeometry(1.5, 0.2),
+  barFill: new THREE.PlaneGeometry(1.4, 0.12).translate(0.7, 0, 0), // scales from its left edge
 };
 const M = {
   moteCore: new THREE.MeshBasicMaterial({ color: PAL.moteCore }),
@@ -30,7 +34,15 @@ const M = {
   lanternOn: std(PAL.lanternLit, { emissive: PAL.lanternLit, emissiveIntensity: 0.9 }),
   cap: std(0x3a2a1c),
   ring: new THREE.MeshBasicMaterial({ color: PAL.lanternLit, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }),
+  lanternTorn: std(PAL.lanternOff, { emissive: PAL.lanternOff, emissiveIntensity: 0.45, side: THREE.DoubleSide }),
+  barBg: new THREE.MeshBasicMaterial({ color: 0x0b0f24, transparent: true, opacity: 0.75, depthWrite: false, side: THREE.DoubleSide }),
+  barFill: new THREE.MeshBasicMaterial({ color: PAL.lanternLit, depthWrite: false, side: THREE.DoubleSide }),
+  barLow: new THREE.MeshBasicMaterial({ color: PAL.uiDanger, depthWrite: false, side: THREE.DoubleSide }),
+  beam: new THREE.LineBasicMaterial({ color: PAL.shadeRim, transparent: true, opacity: 0.8 }),
 };
+
+// Fuel below this shows the low-fuel warning (mirrors tuning.low_fuel_threshold).
+const LOW_FUEL = 30;
 
 export class World {
   constructor(scene, game) {
@@ -53,6 +65,18 @@ export class World {
     this.motes = new Map();
     this.shades = new Map();
     this.drifters = new Map();
+    this.beams = new Map(); // shade id -> drain beam line
+    this.colorBlind = false;
+  }
+
+  // TICKET-03 colour-blind palette: shade rim/eyes #7A3CFF -> #00B3FF; lantern shapes differ (see sync).
+  setColorBlind(on) {
+    this.colorBlind = on;
+    const rim = on ? PAL_CB.shadeRim : PAL.shadeRim;
+    M.shadeRim.color.setHex(rim);
+    M.eye.color.setHex(rim);
+    M.beam.color.setHex(rim);
+    M.barLow.color.setHex(on ? PAL_CB.uiDanger : PAL.uiDanger);
   }
 
   // ---------- static terrain ----------
@@ -128,10 +152,17 @@ export class World {
       const cap = new THREE.Mesh(G.lanternCap, M.cap); cap.position.y = 3.95;
       const light = new THREE.PointLight(PAL.lanternLit, 0, 16, 1.6); light.position.y = 3.3;
       const ring = new THREE.Mesh(G.ring, M.ring); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; ring.visible = false;
-      g.add(post, body, cap, light, ring);
+      const torn = new THREE.Mesh(G.lanternTorn, M.lanternTorn); torn.position.y = 3.3; torn.visible = false;
+      // Fuel bar (billboarded to the camera in sync()).
+      const bar = new THREE.Group();
+      const fill = new THREE.Mesh(G.barFill, M.barFill); fill.position.set(-0.7, 0, 0.01);
+      bar.add(new THREE.Mesh(G.barBg, M.barBg), fill);
+      bar.position.y = 4.75;
+      bar.visible = false;
+      g.add(post, body, torn, cap, light, ring, bar);
       g.position.set(l.x, l.y, l.z);
       this.root.add(g);
-      this.lanterns.set(l.id, { body, light, ring });
+      this.lanterns.set(l.id, { body, torn, light, ring, bar, fill });
     }
   }
 
@@ -190,7 +221,7 @@ export class World {
   }
 
   // ---------- dynamic sync ----------
-  sync(game, now, dt) {
+  sync(game, now, dt, camera) {
     const p = game.player;
     this.player.position.set(p.x, p.y, p.z);
     this.player.rotation.y = Math.atan2(p.facing[0], p.facing[1]);
@@ -200,12 +231,44 @@ export class World {
     const lit = game.lanterns.filter((l) => l.lit).length;
     this.hemi.intensity = ambientFor(lit, game.lanterns.length) * 4; // ticket formula, scaled to three's physical units
 
+    const blinkOff = Math.floor(now * 2) % 2 === 1; // 1 Hz: 0.5 s on, 0.5 s off
     for (const l of game.lanterns) {
       const v = this.lanterns.get(l.id);
-      v.body.material = l.lit ? M.lanternOn : M.lanternOff;
-      v.light.intensity = l.lit ? 60 : 0;
-      v.ring.visible = l.lit;
+      const fuel = game.fuelOut(l);
+      const low = l.lit && fuel < LOW_FUEL;
+      const glowing = l.lit && !(low && blinkOff);
+      v.body.material = glowing ? M.lanternOn : M.lanternOff;
+      v.light.intensity = glowing ? 60 * (0.35 + 0.65 * fuel / 100) : 0;
+      v.ring.visible = l.lit && !low; // a weak lantern has no safe zone
+      // Colour-blind mode: unlit = squashed 20% + torn paper, so lit/unlit differ by shape.
+      const cbUnlit = this.colorBlind && !l.lit;
+      v.body.visible = !cbUnlit;
+      v.torn.visible = cbUnlit;
+      v.torn.scale.y = 0.8;
+      v.bar.visible = l.lit && !(low && blinkOff);
+      v.fill.scale.x = Math.max(0.001, fuel / 100);
+      v.fill.material = low ? M.barLow : M.barFill;
+      if (camera) v.bar.quaternion.copy(camera.quaternion);
     }
+
+    // Drain beams: a thin line from each draining shade to its lantern head.
+    const live = new Set();
+    for (const s of game.shades) {
+      if (s.state !== "drain") continue;
+      const l = game.lanterns.find((q) => q.id === s.targetId);
+      if (!l) continue;
+      live.add(s.id);
+      let line = this.beams.get(s.id);
+      if (!line) {
+        line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), M.beam);
+        this.beams.set(s.id, line); this.root.add(line);
+      }
+      const a = line.geometry.attributes.position.array;
+      a[0] = s.x; a[1] = s.y; a[2] = s.z; a[3] = l.x; a[4] = l.y + 3.3; a[5] = l.z;
+      line.geometry.attributes.position.needsUpdate = true;
+      M.beam.opacity = 0.5 + 0.4 * Math.sin(now * 10);
+    }
+    for (const [id, line] of this.beams) if (!live.has(id)) { this.root.remove(line); line.geometry.dispose(); this.beams.delete(id); }
 
     for (const c of game.charms) {
       const g = this.charms.get(c.id);

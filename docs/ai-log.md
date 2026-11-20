@@ -62,6 +62,33 @@ tạm dừng làm `simTick` đứng yên; cài đặt còn sau khi tải lại. 
 
 **Token/chi phí:** _(điền từ usage của phiên)._
 
+## Phase 3 — TICKET-03 "Đèn cạn dầu" (2026-11-20)
+
+**Công cụ:** Claude Code (Opus 5.5).
+
+**Quy trình Change Request:** ADR 0001 + spec-phase3 (AC `P3.x`) viết **trước** khi code → sửa lõi →
+chạy selftest **trước khi đụng test** để biết chính xác test nào luật mới làm sai (đúng 4: AC1.6, AC1.13,
+AC1.14, AC1.15 — không có test nào vỡ ngoài dự kiến) → cập nhật/xoá từng test kèm comment `[P3 …]` +
+bảng trong CHANGELOG → thêm 16 test P3 (53/53) và 10 case headless (25/25) → web → evidence.
+
+**Lỗi/điểm cần canh của AI (đã xử lý):**
+- Tự review phát hiện một biểu thức tính hao dầu viết rối, cho kết quả đúng (1) chỉ do trùng hợp — viết lại
+  thành `fuel_decay_per_s × FUEL_U / TICK_HZ` trước khi chạy test.
+- Comment test đầu tiên cho AC1.6 mô tả sai lý do (vẫn nói "bỏ qua đèn đã sáng" trong khi luật đó không còn)
+  — sửa lại cho đúng.
+- HUD hiện "Châm dầu (100/100)" khi đèn còn 99.98 (làm tròn 1 chữ số rồi mới floor) — sửa dùng
+  `floor(fuelU/60)`.
+- Thanh dầu không hiện ở khung đầu: billboard copy quaternion camera trước khi camera cập nhật — đổi thứ tự.
+- Phát hiện hệ quả của thứ tự tick bắt buộc: đèn sáng không bao giờ đầy đúng 100 lúc tương tác (ghi vào
+  assumptions thay vì tự ý đổi thứ tự tick).
+
+**Kiểm bản chơi:** phiên không mở trong cửa sổ nào nên `requestAnimationFrame` dừng; dùng hook
+`__ddl.debugAdvance(n)` chạy đúng các hàm thật để kiểm: thắp qua phím E thật, sức chứa 12 ô, hút dầu
+20 → 14 sau 60 tick, cảnh báo + tia hút, chế độ mù màu (lưu, ⚠ trắng, đèn rách/xẹp), thua `dawn` 2/5,
+thắng Đêm 3 → màn Bình Minh, điểm 885 khớp tính tay. Âm thanh vẫn chưa được người nghe kiểm.
+
+**Token/chi phí:** _(điền từ usage của phiên)._
+
 ## Mẫu cho các phase sau
 - Ticket nhận: …
 - Giả định mới: …

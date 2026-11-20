@@ -26,7 +26,7 @@ addEventListener("resize", () => {
 
 // ---------------------------------------------------------------- settings (persisted)
 const SETTINGS_KEY = "ddl.settings.v1";
-const settings = { volume: 0.7, sens: 1.0 };
+const settings = { volume: 0.7, sens: 1.0, colorBlind: false };
 try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}")); } catch { /* private mode */ }
 const saveSettings = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* ignore */ } };
 
@@ -62,11 +62,19 @@ function show(screen) {
 }
 const total = () => Object.values(app.won).reduce((a, b) => a + b, 0);
 
+// TICKET-03 colour-blind palette: CSS (UI warning #FFFFFF + ⚠) and 3D (shade rim, lantern shapes).
+function applyColorBlind() {
+  document.body.classList.toggle("cb", !!settings.colorBlind);
+  if (app.world) app.world.setColorBlind(!!settings.colorBlind);
+}
+applyColorBlind();
+
 function loadNight(n) {
   if (app.world) app.world.dispose();
   app.night = n;
   app.game = new Game({ seed: (Math.random() * 2 ** 31) | 0, night: n });
   app.world = new World(scene, app.game);
+  app.world.setColorBlind(!!settings.colorBlind);
   app.camYaw = 0;
   app.lastSecond = null;
   app.warned = false;
@@ -74,7 +82,7 @@ function loadNight(n) {
   const map = getMap(n);
   $("intro-title").textContent = `Đêm ${n} — ${map.name}`;
   $("intro-quote").textContent = QUOTES[n];
-  $("intro-meta").textContent = `${map.lanterns.length} Đèn Lồng Lớn · ${Math.round(app.game.timeLeft)} giây trước bình minh`;
+  $("intro-meta").textContent = `${map.lanterns.length} Đèn Lồng Lớn · giữ ít nhất ${app.game.winNeed} đèn sáng tới bình minh · ${Math.round(app.game.timeLeft)} giây`;
   show("intro");
 }
 
@@ -147,6 +155,7 @@ function openSettings(back) {
   app.settingsBack = back;
   $("set-volume").value = Math.round(settings.volume * 100);
   $("set-sens").value = settings.sens;
+  $("set-cb").checked = !!settings.colorBlind;
   updateSettingLabels();
   show("settings");
 }
@@ -157,21 +166,24 @@ function updateSettingLabels() {
 
 function onGameOver(result) {
   const g = app.game;
+  const lit = g.litCount(), n = g.lanterns.length;
   if (result === "won") {
     app.won[app.night] = g.score;
     audio.play("win");
     if (app.night === 3) {
       $("dawn-score").textContent = total();
-      $("dawn-breakdown").textContent = [1, 2, 3].filter((n) => n in app.won).map((n) => `Đêm ${n}: ${app.won[n]}`).join(" · ");
+      $("dawn-breakdown").textContent = [1, 2, 3].filter((k) => k in app.won).map((k) => `Đêm ${k}: ${app.won[k]}`).join(" · ");
       return show("dawn");
     }
-    $("result-title").textContent = `Đêm ${app.night} — Đảo đã sáng!`;
-    $("result-sub").textContent = `Điểm Đêm này: ${g.score} · Tổng: ${total()}`;
+    $("result-title").textContent = `Đêm ${app.night} — Bình minh đã tới!`;
+    $("result-sub").textContent = `Giữ được ${lit}/${n} đèn sáng · Điểm Đêm này: ${g.score} · Tổng: ${total()}`;
     $("btn-next").classList.remove("hidden");
     $("btn-retry").classList.add("hidden");
   } else {
     audio.play("lose");
-    const why = g.player.flames <= 0 ? "Mây đã cạn Ngọn Lửa." : "Trời đã sáng mà đảo vẫn chưa thắp đủ đèn.";
+    const why = g.player.flames <= 0
+      ? "Mây đã cạn Ngọn Lửa."
+      : `Trời sáng nhưng chỉ còn ${lit}/${n} đèn sáng (cần ${g.winNeed}).`;
     $("result-title").textContent = "Màn đêm thắng rồi…";
     $("result-sub").textContent = `${why} Tổng điểm hiện tại: ${total()}`;
     $("btn-next").classList.add("hidden");
@@ -183,6 +195,7 @@ function onGameOver(result) {
 const SOUND_FOR = {
   mote_picked: "pickup", lantern_lit: "lit", pulse: "pulse", player_hit: "hit", dash: "dash",
   shade_spawned: "spawn", charm_picked: "charm", drifter_steal: "steal",
+  refuel: "refuel", lantern_out: "out", fuel_drain: "drain",
 };
 
 function simStep() {
@@ -205,10 +218,10 @@ function simStep() {
 
 // ---------------------------------------------------------------- HUD
 const flameSVG = (on) => `<svg viewBox="0 0 24 32" class="flame ${on ? "" : "off"}"><path d="M12 1C14 8 21 11 21 20a9 9 0 0 1-18 0c0-5 3-7 4-11 1 3 2 4 3 4 0-4 0-8 2-12z"/></svg>`;
-let lastFlames = -1;
+let lastFlames = -1, lastCap = -1;
 const cells = $("motebar");
-cells.innerHTML = Array.from({ length: 10 }, () => '<span class="cell"></span>').join("");
 const v3 = new THREE.Vector3();
+const warnIcon = () => (settings.colorBlind ? "⚠ " : "");
 
 function updateHUD() {
   const g = app.game, p = g.player;
@@ -218,12 +231,29 @@ function updateHUD() {
   }
   const t = Math.max(0, g.timeLeft);
   const timer = $("hud-time");
-  timer.textContent = `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  const mmss = `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  timer.textContent = t <= 30 ? warnIcon() + mmss : mmss;
   timer.classList.toggle("danger", t <= 30);
-  const lit = g.lanterns.filter((l) => l.lit).length;
+  const lit = g.litCount();
   $("hud-lanterns").textContent = `${lit}/${g.lanterns.length}`;
+  $("hud-need").textContent = `cần ${g.winNeed}`;
+  $("hud-need").classList.toggle("ok", lit >= g.winNeed);
   $("hud-score").textContent = String(total() + g.score);
-  [...cells.children].forEach((c, i) => c.classList.toggle("on", i < p.carried));
+  // Mote bar: one cell per unit of capacity (10..20), plus "carried / capacity".
+  const cap = g.capacity;
+  if (cap !== lastCap) {
+    cells.innerHTML = Array.from({ length: cap }, () => '<span class="cell"></span>').join("") + '<span id="carry-text"></span>';
+    lastCap = cap;
+  }
+  [...cells.querySelectorAll(".cell")].forEach((c, i) => c.classList.toggle("on", i < p.carried));
+  $("carry-text").textContent = `${p.carried}/${cap}`;
+
+  // Low-fuel warning for the weakest lit lantern under 30.
+  let weakest = null;
+  for (const l of g.lanterns) if (l.lit && g.fuelOut(l) < 30 && (!weakest || l.fuelU < weakest.fuelU)) weakest = l;
+  const fw = $("fuel-warn");
+  fw.classList.toggle("hidden", !weakest);
+  if (weakest) fw.textContent = `${warnIcon()}Đèn ${weakest.id} sắp cạn dầu (${Math.floor(g.fuelOut(weakest))})`;
 
   const cd = (id, left, max, usable = true) => {
     const el = $(id);
@@ -236,18 +266,32 @@ function updateHUD() {
   $("charm-ind").textContent = `Bùa Gió ${Math.ceil(p.charm / 60)}s`;
   $("wind-warn").classList.toggle("hidden", !g.windWarning);
 
-  // Nearest unlit lantern: interaction prompt + off-screen arrow.
-  let best = null, bestD = Infinity;
+  // Interaction prompt: same eligibility as the core (unlit, or lit and not full); nearest wins.
+  let near = null, nearD = Infinity;
   for (const l of g.lanterns) {
-    if (l.lit) continue;
+    if (l.lit && l.fuelU >= g.fuelMaxU) continue;
     const d = Math.hypot(l.x - p.x, l.z - p.z);
-    if (d < bestD) { best = l; bestD = d; }
+    if (d <= g.t.interact_radius && d < nearD) { near = l; nearD = d; }
   }
   const prompt = $("prompt");
-  if (best && bestD <= g.t.interact_radius) {
-    prompt.textContent = `E — Nạp ánh sáng (${best.deposited}/${g.t.lantern_cost})`;
+  if (near) {
+    prompt.textContent = near.lit
+      ? `E — Châm dầu (${Math.floor(near.fuelU / 60)}/100)` // floor of the exact value: never shows 100 while refuelable
+      : `E — ${near.everLit ? "Thắp lại" : "Nạp ánh sáng"} (${near.deposited}/${g._lightCost(near)})`;
     prompt.classList.remove("hidden");
   } else prompt.classList.add("hidden");
+
+  // Off-screen arrow: nearest unlit lantern; if all are lit, the nearest weak (fuel < 30) one.
+  let best = null, bestD = Infinity;
+  const pickNearest = (pred) => {
+    for (const l of g.lanterns) {
+      if (!pred(l)) continue;
+      const d = Math.hypot(l.x - p.x, l.z - p.z);
+      if (d < bestD) { best = l; bestD = d; }
+    }
+  };
+  pickNearest((l) => !l.lit);
+  if (!best) pickNearest((l) => l.lit && g.fuelOut(l) < 30);
 
   const arrow = $("arrow");
   if (best) {
@@ -288,8 +332,8 @@ function frame(now) {
       acc += dt;
       while (acc >= DT && app.screen === "play") { simStep(); acc -= DT; }
     } else acc = 0; // pause/menus: logic is fully stopped
-    app.world.sync(app.game, now / 1000, dt);
-    updateCamera();
+    updateCamera(); // before sync: billboards (fuel bars) copy this frame's camera rotation
+    app.world.sync(app.game, now / 1000, dt, camera);
     if (!$("hud").classList.contains("hidden")) updateHUD();
   } else {
     // Menu backdrop: slow orbit around an empty sky.
@@ -318,6 +362,18 @@ on("btn-result-menu", () => { audio.stopMusic(); show("menu"); });
 on("btn-dawn-menu", () => { audio.stopMusic(); app.won = {}; show("menu"); });
 $("set-volume").addEventListener("input", (e) => { settings.volume = e.target.value / 100; audio.setVolume(settings.volume); updateSettingLabels(); saveSettings(); });
 $("set-sens").addEventListener("input", (e) => { settings.sens = +e.target.value; updateSettingLabels(); saveSettings(); });
+$("set-cb").addEventListener("change", (e) => { settings.colorBlind = e.target.checked; applyColorBlind(); saveSettings(); });
+
+// Debug/evidence hook: advance N real sim steps + one HUD/render pass without requestAnimationFrame
+// (browsers pause rAF in hidden tabs). Uses the same functions as the live loop; never called by the game.
+app.debugAdvance = (ticks = 1) => {
+  for (let i = 0; i < ticks && app.game.state === "playing"; i++) simStep();
+  updateCamera();
+  app.world.sync(app.game, performance.now() / 1000, DT, camera);
+  updateHUD();
+  renderer.render(scene, camera);
+  return { tick: app.game.tick, state: app.game.state, screen: app.screen };
+};
 
 show("menu");
 requestAnimationFrame(frame);
